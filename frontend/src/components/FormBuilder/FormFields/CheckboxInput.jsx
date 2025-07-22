@@ -1,6 +1,7 @@
-import React from 'react';
-import { FormControlLabel, Checkbox, FormHelperText, Box } from '@mui/material';
-import { Controller } from 'react-hook-form';
+import React from "react";
+import { FormControlLabel, Checkbox, FormHelperText, Box } from "@mui/material";
+import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const CheckboxInput = ({ field, control, errors, disabled = false }) => {
   return (
@@ -8,24 +9,34 @@ const CheckboxInput = ({ field, control, errors, disabled = false }) => {
       name={field.name}
       control={control}
       rules={{
-        required: field.required ? `${field.label} is required` : false
+        required: field.required ? `${field.label} is required` : false,
       }}
       render={({ field: controllerField }) => (
         <Box>
-          <FormControlLabel
-            control={
-              <Checkbox
-                {...controllerField}
-                checked={controllerField.value || false}
-                disabled={disabled}
-                color="primary"
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  {...controllerField}
+                  checked={controllerField.value || false}
+                  disabled={disabled}
+                  color="primary"
+                />
+              }
+              label={field.label}
+              sx={{ margin: 0 }}
+            />
+            {field.helperText && (
+              <FieldLabel
+                label=""
+                helperText={field.helperText}
+                sx={{ mb: 0 }}
               />
-            }
-            label={field.label}
-          />
-          {(errors[field.name]?.message || field.helperText) && (
+            )}
+          </Box>
+          {errors[field.name]?.message && (
             <FormHelperText error={!!errors[field.name]}>
-              {errors[field.name]?.message || field.helperText}
+              {errors[field.name]?.message}
             </FormHelperText>
           )}
         </Box>

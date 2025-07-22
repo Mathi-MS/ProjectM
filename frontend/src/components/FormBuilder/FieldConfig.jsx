@@ -17,6 +17,9 @@ import {
   Divider,
   Chip,
   Grid,
+  Drawer,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
   ExpandMore as ExpandMoreIcon,
@@ -26,17 +29,28 @@ import {
 } from "@mui/icons-material";
 import { FIELD_TYPES, GRID_SIZES } from "./constants";
 
-const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
+const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
   const [config, setConfig] = useState(field);
+  const [errors, setErrors] = useState({});
+  const [hasChanges, setHasChanges] = useState(false);
+  const theme = useTheme();
+  const isTablet = useMediaQuery(theme.breakpoints.down("lg"));
 
   useEffect(() => {
     setConfig(field);
+    setErrors({});
+    setHasChanges(false);
   }, [field]);
 
   const handleChange = (key, value) => {
     const updatedConfig = { ...config, [key]: value };
     setConfig(updatedConfig);
-    onUpdate(updatedConfig);
+    setHasChanges(true);
+
+    // Clear error for this field when user starts typing
+    if (errors[key]) {
+      setErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
   };
 
   const handleValidationChange = (key, value) => {
@@ -73,7 +87,139 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
   const removeDependency = () => {
     const { dependsOn, ...rest } = config;
     setConfig(rest);
-    onUpdate(rest);
+  };
+
+  const validateConfig = () => {
+    const newErrors = {};
+
+    // Validate required fields
+    if (!config.name || config.name.trim() === "") {
+      newErrors.name = "Field name is required";
+    }
+
+    // Validate field name format (only lowercase letters and underscores)
+    if (config.name && !/^[a-z_]+$/.test(config.name)) {
+      newErrors.name =
+        "Field name must contain only lowercase letters and underscores";
+    }
+
+    // Check for duplicate field names
+    if (
+      config.name &&
+      !newErrors.name && // Only check uniqueness if format is valid
+      allFields.some((f) => f.id !== config.id && f.name === config.name)
+    ) {
+      newErrors.name = "Field name must be unique";
+    }
+
+    // Validate placeholder is required for applicable field types
+    if (
+      (config.type === FIELD_TYPES.TEXT ||
+        config.type === FIELD_TYPES.EMAIL ||
+        config.type === FIELD_TYPES.NUMBER ||
+        config.type === FIELD_TYPES.PASSWORD ||
+        config.type === FIELD_TYPES.URL ||
+        config.type === FIELD_TYPES.TEL ||
+        config.type === FIELD_TYPES.TEXTAREA ||
+        config.type === FIELD_TYPES.DATE ||
+        config.type === FIELD_TYPES.TIME ||
+        config.type === FIELD_TYPES.WEEK ||
+        config.type === FIELD_TYPES.COLOR ||
+        config.type === FIELD_TYPES.SELECT ||
+        config.type === FIELD_TYPES.MULTISELECT) &&
+      (!config.placeholder || config.placeholder.trim() === "")
+    ) {
+      newErrors.placeholder = "Placeholder is required for this field type";
+    }
+
+    // Validate label for visible fields
+    if (
+      config.type !== FIELD_TYPES.HIDDEN &&
+      config.type !== FIELD_TYPES.DIVIDER &&
+      config.type !== FIELD_TYPES.SPACER &&
+      (!config.label || config.label.trim() === "")
+    ) {
+      newErrors.label = "Label is required for this field type";
+    }
+
+    // Validate options for select fields
+    if (
+      (config.type === FIELD_TYPES.SELECT ||
+        config.type === FIELD_TYPES.MULTISELECT ||
+        config.type === FIELD_TYPES.RADIO) &&
+      (!config.options || config.options.length === 0)
+    ) {
+      newErrors.options = "At least one option is required";
+    }
+
+    // Validate option values
+    if (config.options && config.options.length > 0) {
+      const hasEmptyOption = config.options.some(
+        (opt) => !opt.label || !opt.value
+      );
+      if (hasEmptyOption) {
+        newErrors.options = "All options must have both label and value";
+      }
+    }
+
+    // Validate text content for header/paragraph
+    if (
+      (config.type === FIELD_TYPES.HEADER ||
+        config.type === FIELD_TYPES.PARAGRAPH) &&
+      (!config.text || config.text.trim() === "")
+    ) {
+      newErrors.text = "Text content is required";
+    }
+
+    // Validate validation rules
+    if (config.validations) {
+      if (
+        config.validations.minLength &&
+        config.validations.maxLength &&
+        config.validations.minLength > config.validations.maxLength
+      ) {
+        newErrors.validation =
+          "Minimum length cannot be greater than maximum length";
+      }
+
+      if (
+        config.validations.min &&
+        config.validations.max &&
+        config.validations.min > config.validations.max
+      ) {
+        newErrors.validation =
+          "Minimum value cannot be greater than maximum value";
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = () => {
+    if (validateConfig()) {
+      onUpdate(config);
+      setHasChanges(false);
+      onClose();
+    }
+  };
+
+  const handleCancel = () => {
+    if (hasChanges) {
+      // Show confirmation dialog if there are unsaved changes
+      if (
+        window.confirm(
+          "You have unsaved changes. Are you sure you want to cancel?"
+        )
+      ) {
+        setConfig(field); // Reset to original values
+        setErrors({});
+        setHasChanges(false);
+        onClose();
+      }
+    } else {
+      onClose();
+    }
   };
 
   const renderBasicSettings = () => (
@@ -90,6 +236,9 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
               onChange={(e) => handleChange("name", e.target.value)}
               fullWidth
               size="small"
+              error={!!errors.name}
+              helperText={errors.name}
+              required
             />
           </Grid>
 
@@ -101,6 +250,12 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
                 onChange={(e) => handleChange("label", e.target.value)}
                 fullWidth
                 size="small"
+                error={!!errors.label}
+                helperText={errors.label}
+                required={
+                  config.type !== FIELD_TYPES.DIVIDER &&
+                  config.type !== FIELD_TYPES.SPACER
+                }
               />
             </Grid>
           )}
@@ -111,7 +266,13 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
             config.type === FIELD_TYPES.PASSWORD ||
             config.type === FIELD_TYPES.URL ||
             config.type === FIELD_TYPES.TEL ||
-            config.type === FIELD_TYPES.TEXTAREA) && (
+            config.type === FIELD_TYPES.TEXTAREA ||
+            config.type === FIELD_TYPES.DATE ||
+            config.type === FIELD_TYPES.TIME ||
+            config.type === FIELD_TYPES.WEEK ||
+            config.type === FIELD_TYPES.COLOR ||
+            config.type === FIELD_TYPES.SELECT ||
+            config.type === FIELD_TYPES.MULTISELECT) && (
             <Grid item xs={12}>
               <TextField
                 label="Placeholder"
@@ -119,9 +280,33 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
                 onChange={(e) => handleChange("placeholder", e.target.value)}
                 fullWidth
                 size="small"
+                error={!!errors.placeholder}
+                helperText={errors.placeholder}
+                required
               />
             </Grid>
           )}
+
+          {config.type !== FIELD_TYPES.HIDDEN &&
+            config.type !== FIELD_TYPES.HEADER &&
+            config.type !== FIELD_TYPES.PARAGRAPH &&
+            config.type !== FIELD_TYPES.DIVIDER &&
+            config.type !== FIELD_TYPES.SPACER &&
+            config.type !== FIELD_TYPES.STEP && (
+              <Grid item xs={12}>
+                <TextField
+                  label="Helper Text"
+                  value={config.helperText || ""}
+                  onChange={(e) => handleChange("helperText", e.target.value)}
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={2}
+                  placeholder="Enter helpful information for users"
+                  helperText="This text will appear as a tooltip when users hover over the help icon"
+                />
+              </Grid>
+            )}
 
           <Grid item xs={6}>
             <FormControl fullWidth size="small">
@@ -140,27 +325,25 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
             </FormControl>
           </Grid>
 
-          <Grid item xs={6}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={config.required || false}
-                  onChange={(e) => handleChange("required", e.target.checked)}
+          {config.type !== FIELD_TYPES.HEADER &&
+            config.type !== FIELD_TYPES.PARAGRAPH &&
+            config.type !== FIELD_TYPES.DIVIDER &&
+            config.type !== FIELD_TYPES.SPACER &&
+            config.type !== FIELD_TYPES.STEP && (
+              <Grid item xs={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={config.required || false}
+                      onChange={(e) =>
+                        handleChange("required", e.target.checked)
+                      }
+                    />
+                  }
+                  label="Required"
                 />
-              }
-              label="Required"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              label="Helper Text"
-              value={config.helperText || ""}
-              onChange={(e) => handleChange("helperText", e.target.value)}
-              fullWidth
-              size="small"
-            />
-          </Grid>
+              </Grid>
+            )}
         </Grid>
       </AccordionDetails>
     </Accordion>
@@ -173,6 +356,13 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
       </AccordionSummary>
       <AccordionDetails>
         <Grid container spacing={2}>
+          {errors.validation && (
+            <Grid item xs={12}>
+              <Typography color="error" variant="body2">
+                {errors.validation}
+              </Typography>
+            </Grid>
+          )}
           {(config.type === FIELD_TYPES.TEXT ||
             config.type === FIELD_TYPES.TEXTAREA ||
             config.type === FIELD_TYPES.PASSWORD) && (
@@ -329,6 +519,11 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
       </AccordionSummary>
       <AccordionDetails>
         <Box>
+          {errors.options && (
+            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+              {errors.options}
+            </Typography>
+          )}
           {config.options?.map((option, index) => (
             <Box
               key={index}
@@ -469,6 +664,9 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
                   onChange={(e) => handleChange("text", e.target.value)}
                   fullWidth
                   size="small"
+                  error={!!errors.text}
+                  helperText={errors.text}
+                  required
                 />
               </Grid>
               <Grid item xs={6}>
@@ -525,6 +723,9 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
                   multiline
                   rows={3}
                   size="small"
+                  error={!!errors.text}
+                  helperText={errors.text}
+                  required
                 />
               </Grid>
               <Grid item xs={12}>
@@ -541,6 +742,46 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
                     <MenuItem value="justify">Justify</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+      );
+    }
+
+    if (config.type === FIELD_TYPES.STEP) {
+      return (
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle1">Step Settings</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Step Title"
+                  value={config.title || ""}
+                  onChange={(e) => handleChange("title", e.target.value)}
+                  fullWidth
+                  size="small"
+                  error={!!errors.title}
+                  helperText={
+                    errors.title || "This will be displayed as the step name"
+                  }
+                  required
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  label="Step Description"
+                  value={config.description || ""}
+                  onChange={(e) => handleChange("description", e.target.value)}
+                  fullWidth
+                  multiline
+                  rows={2}
+                  size="small"
+                  helperText="Optional description for this step"
+                />
               </Grid>
             </Grid>
           </AccordionDetails>
@@ -590,17 +831,8 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
     return null;
   };
 
-  return (
-    <Box
-      sx={{
-        width: 350,
-        p: 2,
-        borderLeft: 1,
-        borderColor: "divider",
-        height: "100vh",
-        overflow: "auto",
-      }}
-    >
+  const configContent = (
+    <>
       <Box
         sx={{
           display: "flex",
@@ -609,8 +841,20 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
           mb: 2,
         }}
       >
-        <Typography variant="h6">Field Configuration</Typography>
-        <IconButton onClick={onClose} size="small">
+        <Box>
+          <Typography variant="h6">
+            Field Configuration
+            {hasChanges && (
+              <Chip
+                label="Unsaved"
+                color="warning"
+                size="small"
+                sx={{ ml: 1 }}
+              />
+            )}
+          </Typography>
+        </Box>
+        <IconButton onClick={handleCancel} size="small">
           <CloseIcon />
         </IconButton>
       </Box>
@@ -627,7 +871,55 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields }) => {
 
       {renderDependencySettings()}
       {renderSpecialSettings()}
-    </Box>
+
+      {/* Action Buttons */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          mt: 3,
+          pt: 2,
+          borderTop: 1,
+          borderColor: "divider",
+        }}
+      >
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleSave}
+          fullWidth
+          size="large"
+          disabled={!hasChanges}
+        >
+          {hasChanges ? "Save Changes" : "No Changes"}
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={handleCancel}
+          fullWidth
+          size="large"
+        >
+          Cancel
+        </Button>
+      </Box>
+    </>
+  );
+
+  return (
+    <Drawer
+      anchor="right"
+      open={true}
+      onClose={onClose}
+      sx={{
+        "& .MuiDrawer-paper": {
+          width: isMobile ? "100%" : 400,
+          maxWidth: "100vw",
+          p: 2,
+        },
+      }}
+    >
+      {configContent}
+    </Drawer>
   );
 };
 

@@ -1,6 +1,7 @@
 import React from "react";
-import { TextField } from "@mui/material";
+import { TextField, Box } from "@mui/material";
 import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const TextareaInput = ({ field, control, errors, disabled = false }) => {
   return (
@@ -23,22 +24,28 @@ const TextareaInput = ({ field, control, errors, disabled = false }) => {
           : undefined,
       }}
       render={({ field: controllerField }) => (
-        <TextField
-          {...controllerField}
-          label={field.label}
-          placeholder={field.placeholder}
-          fullWidth
-          multiline
-          rows={field.rows || 4}
-          disabled={disabled}
-          error={!!errors[field.name]}
-          helperText={errors[field.name]?.message || field.helperText}
-          variant="outlined"
-          size="medium"
-          InputLabelProps={{
-            shrink: true,
-          }}
-        />
+        <Box>
+          <FieldLabel
+            label={field.label}
+            required={field.required}
+            helperText={field.helperText}
+          />
+          <TextField
+            {...controllerField}
+            placeholder={field.placeholder}
+            fullWidth
+            multiline
+            rows={field.rows || 4}
+            disabled={disabled}
+            error={!!errors[field.name]}
+            helperText={errors[field.name]?.message}
+            variant="outlined"
+            size="medium"
+            InputLabelProps={{
+              shrink: true,
+            }}
+          />
+        </Box>
       )}
     />
   );

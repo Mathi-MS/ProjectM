@@ -8,6 +8,8 @@ import {
   Button,
   Grid,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
   ExpandMore as ExpandMoreIcon,
@@ -85,6 +87,13 @@ const DraggableFieldType = ({ type, label, onAdd }) => {
 
   const IconComponent = fieldIcons[type] || TextFields;
 
+  const handleClick = (e) => {
+    // Only handle click if not currently dragging
+    if (!isDragging) {
+      onAdd(type);
+    }
+  };
+
   return (
     <Button
       ref={setNodeRef}
@@ -94,8 +103,7 @@ const DraggableFieldType = ({ type, label, onAdd }) => {
       variant="outlined"
       fullWidth
       startIcon={<IconComponent />}
-      onClick={() => onAdd(type)}
-      onDragStart={(e) => e.preventDefault()}
+      onClick={handleClick}
       sx={{
         justifyContent: "flex-start",
         textTransform: "none",
@@ -113,9 +121,11 @@ const DraggableFieldType = ({ type, label, onAdd }) => {
 };
 
 const FieldTypes = ({ onAddField }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const handleAddField = (type) => {
-    const newField = createField(type);
-    onAddField(newField);
+    onAddField(type);
   };
 
   const getFieldLabel = (type) => {
@@ -151,23 +161,24 @@ const FieldTypes = ({ onAddField }) => {
   return (
     <Box
       sx={{
-        width: 300,
+        width: isMobile ? "100%" : 300,
         p: 2,
-        borderRight: 1,
+        borderRight: isMobile ? 0 : 1,
         borderColor: "divider",
-        height: "100vh",
+        height: isMobile ? "auto" : "100vh",
         overflow: "auto",
+        maxHeight: isMobile ? "calc(100vh - 120px)" : "100vh",
       }}
     >
       <Typography variant="h6" gutterBottom>
         Field Types
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Drag fields to the form or click to add
+        {isMobile ? "Tap to add fields" : "Drag fields to the form or click to add"}
       </Typography>
 
       {Object.entries(FIELD_CATEGORIES).map(([category, fields]) => (
-        <Accordion key={category} defaultExpanded>
+        <Accordion key={category} defaultExpanded={!isMobile}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="subtitle1" fontWeight="medium">
               {category}
@@ -179,7 +190,7 @@ const FieldTypes = ({ onAddField }) => {
                 <Tooltip
                   key={type}
                   title={`Add ${getFieldLabel(type)}`}
-                  placement="right"
+                  placement={isMobile ? "top" : "right"}
                 >
                   <Box>
                     <DraggableFieldType

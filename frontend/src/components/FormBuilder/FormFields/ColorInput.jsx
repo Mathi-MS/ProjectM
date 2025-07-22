@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Box, TextField, Button, Popover } from '@mui/material';
-import { Controller } from 'react-hook-form';
-import { HexColorPicker } from 'react-colorful';
+import React, { useState } from "react";
+import { Box, TextField, Button, Popover } from "@mui/material";
+import { Controller } from "react-hook-form";
+import { HexColorPicker } from "react-colorful";
+import FieldLabel from "../FieldLabel";
 
 const ColorInput = ({ field, control, errors, disabled = false }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -21,17 +22,21 @@ const ColorInput = ({ field, control, errors, disabled = false }) => {
       name={field.name}
       control={control}
       rules={{
-        required: field.required ? `${field.label} is required` : false
+        required: field.required ? `${field.label} is required` : false,
       }}
       render={({ field: controllerField }) => (
         <Box>
+          <FieldLabel
+            label={field.label}
+            required={field.required}
+            helperText={field.helperText}
+          />
           <TextField
             {...controllerField}
-            label={field.label}
             fullWidth
             disabled={disabled}
             error={!!errors[field.name]}
-            helperText={errors[field.name]?.message || field.helperText}
+            helperText={errors[field.name]?.message}
             variant="outlined"
             size="medium"
             InputLabelProps={{
@@ -46,14 +51,14 @@ const ColorInput = ({ field, control, errors, disabled = false }) => {
                     minWidth: 40,
                     width: 40,
                     height: 40,
-                    backgroundColor: controllerField.value || '#000000',
-                    border: '1px solid #ccc',
-                    '&:hover': {
-                      backgroundColor: controllerField.value || '#000000',
-                    }
+                    backgroundColor: controllerField.value || "#000000",
+                    border: "1px solid #ccc",
+                    "&:hover": {
+                      backgroundColor: controllerField.value || "#000000",
+                    },
                   }}
                 />
-              )
+              ),
             }}
           />
           <Popover
@@ -61,13 +66,13 @@ const ColorInput = ({ field, control, errors, disabled = false }) => {
             anchorEl={anchorEl}
             onClose={handleClose}
             anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'left',
+              vertical: "bottom",
+              horizontal: "left",
             }}
           >
             <Box sx={{ p: 2 }}>
               <HexColorPicker
-                color={controllerField.value || '#000000'}
+                color={controllerField.value || "#000000"}
                 onChange={controllerField.onChange}
               />
             </Box>

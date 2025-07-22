@@ -1,6 +1,13 @@
-import React from 'react';
-import { FormControl, InputLabel, Select, MenuItem, FormHelperText } from '@mui/material';
-import { Controller } from 'react-hook-form';
+import React from "react";
+import {
+  FormControl,
+  Select,
+  MenuItem,
+  FormHelperText,
+  Box,
+} from "@mui/material";
+import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const SelectInput = ({ field, control, errors, disabled = false }) => {
   return (
@@ -8,29 +15,50 @@ const SelectInput = ({ field, control, errors, disabled = false }) => {
       name={field.name}
       control={control}
       rules={{
-        required: field.required ? `${field.label} is required` : false
+        required: field.required ? `${field.label} is required` : false,
       }}
       render={({ field: controllerField }) => (
-        <FormControl fullWidth error={!!errors[field.name]} disabled={disabled}>
-          <InputLabel>{field.label}</InputLabel>
-          <Select
-            {...controllerField}
+        <Box>
+          <FieldLabel
             label={field.label}
-            variant="outlined"
-            size="medium"
+            required={field.required}
+            helperText={field.helperText}
+          />
+          <FormControl
+            fullWidth
+            error={!!errors[field.name]}
+            disabled={disabled}
           >
-            {field.options?.map((option, index) => (
-              <MenuItem key={index} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-          {(errors[field.name]?.message || field.helperText) && (
-            <FormHelperText>
-              {errors[field.name]?.message || field.helperText}
-            </FormHelperText>
-          )}
-        </FormControl>
+            <Select
+              {...controllerField}
+              variant="outlined"
+              size="medium"
+              displayEmpty
+              renderValue={(selected) => {
+                if (!selected) {
+                  return (
+                    <em style={{ color: "#999" }}>
+                      {field.placeholder || "Select an option"}
+                    </em>
+                  );
+                }
+                const option = field.options?.find(
+                  (opt) => opt.value === selected
+                );
+                return option ? option.label : selected;
+              }}
+            >
+              {field.options?.map((option, index) => (
+                <MenuItem key={index} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+            {errors[field.name]?.message && (
+              <FormHelperText>{errors[field.name]?.message}</FormHelperText>
+            )}
+          </FormControl>
+        </Box>
       )}
     />
   );

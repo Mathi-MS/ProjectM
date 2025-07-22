@@ -1,7 +1,7 @@
-import React from 'react';
-import { Grid } from '@mui/material';
-import { FIELD_TYPES } from './constants';
-import { checkFieldDependency } from './utils';
+import React from "react";
+import { Grid } from "@mui/material";
+import { FIELD_TYPES, RESPONSIVE_GRID_CONFIG } from "./constants";
+import { checkFieldDependency } from "./utils";
 import {
   TextInput,
   NumberInput,
@@ -23,8 +23,11 @@ import {
   RatingInput,
   HeaderElement,
   ParagraphElement,
-  HiddenInput
-} from './FormFields';
+  DividerElement,
+  SpacerElement,
+  HiddenInput,
+  StepElement,
+} from "./FormFields";
 
 const FormRenderer = ({ fields, control, errors, watch, disabled = false }) => {
   const watchedValues = watch ? watch() : {};
@@ -39,7 +42,7 @@ const FormRenderer = ({ fields, control, errors, watch, disabled = false }) => {
       field,
       control,
       errors,
-      disabled
+      disabled,
     };
 
     switch (field.type) {
@@ -83,11 +86,28 @@ const FormRenderer = ({ fields, control, errors, watch, disabled = false }) => {
         return <HeaderElement field={field} />;
       case FIELD_TYPES.PARAGRAPH:
         return <ParagraphElement field={field} />;
+      case FIELD_TYPES.DIVIDER:
+        return <DividerElement field={field} />;
+      case FIELD_TYPES.SPACER:
+        return <SpacerElement field={field} />;
       case FIELD_TYPES.HIDDEN:
         return <HiddenInput {...commonProps} />;
+      case FIELD_TYPES.STEP:
+        return <StepElement field={field} />;
       default:
         return null;
     }
+  };
+
+  const getResponsiveGridSize = (gridSize) => {
+    const size = gridSize || 6;
+    return {
+      xs: RESPONSIVE_GRID_CONFIG.xs[size] || 12,
+      sm: RESPONSIVE_GRID_CONFIG.sm[size] || 6,
+      md: RESPONSIVE_GRID_CONFIG.md[size] || size,
+      lg: size,
+      xl: size,
+    };
   };
 
   return (
@@ -96,12 +116,16 @@ const FormRenderer = ({ fields, control, errors, watch, disabled = false }) => {
         const renderedField = renderField(field);
         if (!renderedField) return null;
 
+        const responsiveGrid = getResponsiveGridSize(field.gridSize);
+
         return (
-          <Grid 
-            item 
-            xs={12} 
-            sm={field.gridSize === 12 ? 12 : field.gridSize || 6}
-            md={field.gridSize || 6}
+          <Grid
+            item
+            xs={responsiveGrid.xs}
+            sm={responsiveGrid.sm}
+            md={responsiveGrid.md}
+            lg={responsiveGrid.lg}
+            xl={responsiveGrid.xl}
             key={field.id}
           >
             {renderedField}

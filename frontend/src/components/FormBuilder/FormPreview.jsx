@@ -9,6 +9,8 @@ import {
   StepLabel,
   Alert,
   Divider,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { useForm } from "react-hook-form";
 import FormRenderer from "./FormRenderer";
@@ -18,6 +20,9 @@ import { FIELD_TYPES } from "./constants";
 const FormPreview = ({ fields }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [submittedData, setSubmittedData] = useState(null);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const {
     control,
@@ -33,20 +38,45 @@ const FormPreview = ({ fields }) => {
   const steps = generateFormSteps(fields);
   const currentStepFields = steps[activeStep]?.fields || [];
 
-  const handleNext = async () => {
+  console.log(
+    "FormPreview render - Steps:",
+    steps.length,
+    "Active step:",
+    activeStep
+  );
+  console.log("Current step fields:", currentStepFields.length);
+
+  const handleNext = async (e) => {
+    // Prevent form submission
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    console.log("handleNext called, current step:", activeStep);
+    console.log("Total steps:", steps.length);
+
     // Validate current step fields
     const currentFieldNames = currentStepFields
       .filter(
         (field) =>
           field.type !== FIELD_TYPES.HEADER &&
-          field.type !== FIELD_TYPES.PARAGRAPH
+          field.type !== FIELD_TYPES.PARAGRAPH &&
+          field.type !== FIELD_TYPES.STEP &&
+          field.type !== FIELD_TYPES.DIVIDER &&
+          field.type !== FIELD_TYPES.SPACER
       )
       .map((field) => field.name);
 
+    console.log("Fields to validate:", currentFieldNames);
+
     const isValid = await trigger(currentFieldNames);
+    console.log("Validation result:", isValid);
 
     if (isValid) {
-      setActiveStep((prevStep) => prevStep + 1);
+      const nextStep = activeStep + 1;
+      console.log("Moving to step:", nextStep);
+      setActiveStep(nextStep);
     }
   };
 
@@ -60,11 +90,29 @@ const FormPreview = ({ fields }) => {
   };
 
   const onSubmit = (data) => {
-    console.log("Form submitted:", data);
-    setSubmittedData(data);
+    console.log("onSubmit called - Form submitted:", data);
+    console.log("Current step when submitting:", activeStep);
+    console.log("Is last step:", isLastStep);
+
+    // Only submit if we're on the last step
+    if (isLastStep) {
+      setSubmittedData(data);
+    } else {
+      console.log("Preventing submission - not on last step");
+      return false;
+    }
   };
 
   const isLastStep = activeStep === steps.length - 1;
+
+  console.log(
+    "isLastStep calculation:",
+    activeStep,
+    "===",
+    steps.length - 1,
+    "=",
+    isLastStep
+  );
 
   if (fields.length === 0) {
     return (
@@ -108,19 +156,23 @@ const FormPreview = ({ fields }) => {
   }
 
   return (
-    <Paper sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
+    <Paper sx={{ p: isMobile ? 2 : 3 }}>
+      <Typography variant={isMobile ? "h6" : "h5"} gutterBottom>
         Form Preview
       </Typography>
 
       <Typography variant="body2" sx={{ mb: 2 }}>
-        Fields count: {fields.length} | Steps: {steps.length} | Current step
-        fields: {currentStepFields.length}
+        Fields: {fields.length} | Steps: {steps.length} | Current:{" "}
+        {currentStepFields.length}
       </Typography>
 
       {steps.length > 1 && (
         <Box sx={{ mb: 4 }}>
-          <Stepper activeStep={activeStep} alternativeLabel>
+          <Stepper
+            activeStep={activeStep}
+            alternativeLabel={!isMobile}
+            orientation={isMobile ? "vertical" : "horizontal"}
+          >
             {steps.map((step, index) => (
               <Step key={index}>
                 <StepLabel>{step.title}</StepLabel>
@@ -146,22 +198,51 @@ const FormPreview = ({ fields }) => {
           />
         </Box>
 
-        <Box sx={{ display: "flex", justifyContent: "space-between", mt: 4 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            mt: 4,
+            flexDirection: isMobile ? "column" : "row",
+            gap: isMobile ? 2 : 0,
+          }}
+        >
           <Button
+            type="button"
             disabled={activeStep === 0}
             onClick={handleBack}
             variant="outlined"
+            size={isMobile ? "large" : "medium"}
+            fullWidth={isMobile}
           >
             Back
           </Button>
 
-          <Box sx={{ display: "flex", gap: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              justifyContent: isMobile ? "center" : "flex-end",
+            }}
+          >
             {isLastStep ? (
-              <Button type="submit" variant="contained" color="primary">
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                size={isMobile ? "large" : "medium"}
+                fullWidth={isMobile}
+              >
                 Submit Form
               </Button>
             ) : (
-              <Button onClick={handleNext} variant="contained">
+              <Button
+                type="button"
+                onClick={handleNext}
+                variant="contained"
+                size={isMobile ? "large" : "medium"}
+                fullWidth={isMobile}
+              >
                 Next
               </Button>
             )}

@@ -1,6 +1,7 @@
-import React from 'react';
-import { TextField } from '@mui/material';
-import { Controller } from 'react-hook-form';
+import React from "react";
+import { TextField, Box } from "@mui/material";
+import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const EmailInput = ({ field, control, errors, disabled = false }) => {
   return (
@@ -11,25 +12,31 @@ const EmailInput = ({ field, control, errors, disabled = false }) => {
         required: field.required ? `${field.label} is required` : false,
         pattern: {
           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-          message: 'Invalid email address'
-        }
+          message: "Invalid email address",
+        },
       }}
       render={({ field: controllerField }) => (
-        <TextField
-          {...controllerField}
-          type="email"
-          label={field.label}
-          placeholder={field.placeholder}
-          fullWidth
-          disabled={disabled}
-          error={!!errors[field.name]}
-          helperText={errors[field.name]?.message || field.helperText}
-          variant="outlined"
-          size="medium"
-          InputLabelProps={{
-            shrink: true,
-          }}
-        />
+        <Box>
+          <FieldLabel
+            label={field.label}
+            required={field.required}
+            helperText={field.helperText}
+          />
+          <TextField
+            {...controllerField}
+            type="email"
+            placeholder={field.placeholder}
+            fullWidth
+            disabled={disabled}
+            error={!!errors[field.name]}
+            helperText={errors[field.name]?.message}
+            variant="outlined"
+            size="medium"
+            InputLabelProps={{
+              shrink: true,
+            }}
+          />
+        </Box>
       )}
     />
   );

@@ -6,6 +6,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/database");
 const User = require("./models/User");
+const Form = require("./models/Form");
 require("dotenv").config();
 
 // Connect to MongoDB
@@ -29,7 +30,12 @@ const authLimiter = rateLimit({
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3003",
+    ],
     credentials: true,
   })
 );
@@ -800,6 +806,289 @@ app.post(
     }
   }
 );
+
+// ============= FORM MANAGEMENT ENDPOINTS =============
+
+// Save form endpoint
+app.post(
+  "/api/forms/save",
+  [
+    body("formName")
+      .trim()
+      .isLength({ min: 3, max: 100 })
+      .withMessage("Form name must be between 3 and 100 characters"),
+    body("fields").isArray().withMessage("Fields must be an array"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { formName, fields, metadata } = req.body;
+
+      // Create new form
+      const newForm = new Form({
+        formName,
+        fields,
+        metadata: {
+          ...metadata,
+          created: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+        },
+        // If authentication is implemented, add createdBy: req.user.id
+      });
+
+      await newForm.save();
+
+      res.status(201).json({
+        message: "Form saved successfully",
+        form: {
+          id: newForm._id,
+          formName: newForm.formName,
+          fieldsCount: newForm.fields.length,
+          createdAt: newForm.createdAt,
+          metadata: newForm.metadata,
+        },
+      });
+    } catch (error) {
+      console.error("Form save error:", error);
+
+      // Handle mongoose validation errors
+      if (error.name === "ValidationError") {
+        const validationErrors = Object.values(error.errors).map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validationErrors,
+        });
+      }
+
+      res.status(500).json({
+        message: "Internal server error while saving form",
+      });
+    }
+  }
+);
+
+// Get all forms endpoint
+app.get("/api/forms", async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Build search query
+    const searchQuery = search
+      ? {
+          formName: { $regex: search, $options: "i" },
+          isActive: true,
+        }
+      : { isActive: true };
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortDirection = sortOrder === "desc" ? -1 : 1;
+
+    // Get forms with pagination and sorting
+    const forms = await Form.find(searchQuery)
+      .sort({ [sortBy]: sortDirection })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .select("formName fields metadata createdAt updatedAt");
+
+    // Get total count for pagination
+    const totalForms = await Form.countDocuments(searchQuery);
+    const totalPages = Math.ceil(totalForms / parseInt(limit));
+
+    res.json({
+      message: "Forms retrieved successfully",
+      forms: forms.map((form) => ({
+        id: form._id,
+        formName: form.formName,
+        fieldsCount: form.fields.length,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt,
+        metadata: form.metadata,
+      })),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalForms,
+        hasNextPage: parseInt(page) < totalPages,
+        hasPrevPage: parseInt(page) > 1,
+      },
+    });
+  } catch (error) {
+    console.error("Get forms error:", error);
+    res.status(500).json({
+      message: "Internal server error while fetching forms",
+    });
+  }
+});
+
+// Get form by ID endpoint
+app.get("/api/forms/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid form ID format",
+      });
+    }
+
+    const form = await Form.findById(id);
+    if (!form || !form.isActive) {
+      return res.status(404).json({
+        message: "Form not found",
+      });
+    }
+
+    res.json({
+      message: "Form retrieved successfully",
+      form: {
+        id: form._id,
+        formName: form.formName,
+        fields: form.fields,
+        metadata: form.metadata,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Get form error:", error);
+    res.status(500).json({
+      message: "Internal server error while fetching form",
+    });
+  }
+});
+
+// Update form endpoint
+app.put(
+  "/api/forms/:id",
+  [
+    body("formName")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage("Form name must be between 1 and 100 characters"),
+    body("fields").optional().isArray().withMessage("Fields must be an array"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { id } = req.params;
+      const { formName, fields, metadata } = req.body;
+
+      // Validate ObjectId
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({
+          message: "Invalid form ID format",
+        });
+      }
+
+      const form = await Form.findById(id);
+      if (!form || !form.isActive) {
+        return res.status(404).json({
+          message: "Form not found",
+        });
+      }
+
+      // Update fields
+      if (formName) form.formName = formName;
+      if (fields) form.fields = fields;
+      if (metadata) {
+        form.metadata = {
+          ...form.metadata,
+          ...metadata,
+          lastModified: new Date().toISOString(),
+        };
+      }
+
+      await form.save();
+
+      res.json({
+        message: "Form updated successfully",
+        form: {
+          id: form._id,
+          formName: form.formName,
+          fieldsCount: form.fields.length,
+          metadata: form.metadata,
+          updatedAt: form.updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error("Form update error:", error);
+
+      // Handle mongoose validation errors
+      if (error.name === "ValidationError") {
+        const validationErrors = Object.values(error.errors).map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validationErrors,
+        });
+      }
+
+      res.status(500).json({
+        message: "Internal server error while updating form",
+      });
+    }
+  }
+);
+
+// Delete form endpoint (soft delete)
+app.delete("/api/forms/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid form ID format",
+      });
+    }
+
+    const form = await Form.findById(id);
+    if (!form || !form.isActive) {
+      return res.status(404).json({
+        message: "Form not found",
+      });
+    }
+
+    await form.softDelete();
+
+    res.json({
+      message: "Form deleted successfully",
+    });
+  } catch (error) {
+    console.error("Form delete error:", error);
+    res.status(500).json({
+      message: "Internal server error while deleting form",
+    });
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

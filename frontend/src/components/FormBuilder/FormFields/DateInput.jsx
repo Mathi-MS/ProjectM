@@ -1,6 +1,7 @@
-import React from 'react';
-import { TextField } from '@mui/material';
-import { Controller } from 'react-hook-form';
+import React from "react";
+import { TextField, Box } from "@mui/material";
+import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const DateInput = ({ field, control, errors, disabled = false }) => {
   return (
@@ -9,34 +10,45 @@ const DateInput = ({ field, control, errors, disabled = false }) => {
       control={control}
       rules={{
         required: field.required ? `${field.label} is required` : false,
-        min: field.validations?.min ? {
-          value: field.validations.min,
-          message: `Date must be after ${field.validations.min}`
-        } : undefined,
-        max: field.validations?.max ? {
-          value: field.validations.max,
-          message: `Date must be before ${field.validations.max}`
-        } : undefined
+        min: field.validations?.min
+          ? {
+              value: field.validations.min,
+              message: `Date must be after ${field.validations.min}`,
+            }
+          : undefined,
+        max: field.validations?.max
+          ? {
+              value: field.validations.max,
+              message: `Date must be before ${field.validations.max}`,
+            }
+          : undefined,
       }}
       render={({ field: controllerField }) => (
-        <TextField
-          {...controllerField}
-          type="date"
-          label={field.label}
-          fullWidth
-          disabled={disabled}
-          error={!!errors[field.name]}
-          helperText={errors[field.name]?.message || field.helperText}
-          variant="outlined"
-          size="medium"
-          InputLabelProps={{
-            shrink: true,
-          }}
-          inputProps={{
-            min: field.validations?.min,
-            max: field.validations?.max
-          }}
-        />
+        <Box>
+          <FieldLabel
+            label={field.label}
+            required={field.required}
+            helperText={field.helperText}
+          />
+          <TextField
+            {...controllerField}
+            type="date"
+            placeholder={field.placeholder}
+            fullWidth
+            disabled={disabled}
+            error={!!errors[field.name]}
+            helperText={errors[field.name]?.message}
+            variant="outlined"
+            size="medium"
+            InputLabelProps={{
+              shrink: true,
+            }}
+            inputProps={{
+              min: field.validations?.min,
+              max: field.validations?.max,
+            }}
+          />
+        </Box>
       )}
     />
   );

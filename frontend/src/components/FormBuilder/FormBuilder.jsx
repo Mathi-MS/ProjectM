@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -7,7 +7,17 @@ import {
   Button,
   Tooltip,
   Alert,
+  Drawer,
+  useMediaQuery,
+  useTheme,
+  Fab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
+import toast from "react-hot-toast";
 import {
   DndContext,
   closestCenter,
@@ -32,6 +42,10 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   DragIndicator as DragIcon,
+  Menu as MenuIcon,
+  Close as CloseIcon,
+  Add as AddIcon,
+  EditNote as EditNoteIcon,
 } from "@mui/icons-material";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -66,7 +80,13 @@ const DroppableArea = ({ children, isEmpty }) => {
   );
 };
 
-const SortableFieldItem = ({ field, onEdit, onDelete, isSelected }) => {
+const SortableFieldItem = ({
+  field,
+  onEdit,
+  onDelete,
+  isSelected,
+  isMobile,
+}) => {
   const {
     attributes,
     listeners,
@@ -94,7 +114,7 @@ const SortableFieldItem = ({ field, onEdit, onDelete, isSelected }) => {
       style={style}
       elevation={isDragging ? 4 : 1}
       sx={{
-        p: 2,
+        p: isMobile ? 1.5 : 2,
         mb: 1,
         cursor: "pointer",
         border: isSelected ? 2 : 0,
@@ -106,39 +126,73 @@ const SortableFieldItem = ({ field, onEdit, onDelete, isSelected }) => {
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <IconButton
-          size="small"
+          size={isMobile ? "medium" : "small"}
           {...attributes}
           {...listeners}
-          sx={{ cursor: "grab" }}
+          sx={{
+            cursor: "grab",
+            minWidth: isMobile ? 44 : "auto",
+            minHeight: isMobile ? 44 : "auto",
+          }}
         >
           <DragIcon />
         </IconButton>
 
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="body2" fontWeight="medium">
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            fontWeight="medium"
+            sx={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {getFieldDisplayName(field)}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              display: isMobile ? "block" : "inline",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {field.type} • Grid: {field.gridSize}/12
             {field.required && " • Required"}
           </Typography>
         </Box>
 
-        <Tooltip title="Edit Field">
-          <IconButton size="small" onClick={() => onEdit(field)}>
-            <EditIcon />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: "flex", gap: 0.5 }}>
+          <Tooltip title="Edit Field">
+            <IconButton
+              size={isMobile ? "medium" : "small"}
+              onClick={() => onEdit(field)}
+              sx={{
+                minWidth: isMobile ? 44 : "auto",
+                minHeight: isMobile ? 44 : "auto",
+              }}
+            >
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
 
-        <Tooltip title="Delete Field">
-          <IconButton
-            size="small"
-            onClick={() => onDelete(field.id)}
-            color="error"
-          >
-            <DeleteIcon />
-          </IconButton>
-        </Tooltip>
+          <Tooltip title="Delete Field">
+            <IconButton
+              size={isMobile ? "medium" : "small"}
+              onClick={() => onDelete(field.id)}
+              color="error"
+              sx={{
+                minWidth: isMobile ? 44 : "auto",
+                minHeight: isMobile ? 44 : "auto",
+              }}
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
     </Paper>
   );
@@ -149,6 +203,17 @@ const FormBuilder = () => {
   const [selectedField, setSelectedField] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [activeId, setActiveId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [formName, setFormName] = useState("Form Builder");
+  const [showNameDialog, setShowNameDialog] = useState(true);
+  const [tempFormName, setTempFormName] = useState("");
+
+  const [previewData, setPreviewData] = useState({});
+  const [isFormComplete, setIsFormComplete] = useState(false);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isTablet = useMediaQuery(theme.breakpoints.down("lg"));
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -161,11 +226,82 @@ const FormBuilder = () => {
     })
   );
 
-  const handleAddField = useCallback((fieldType) => {
-    const newField = createField(fieldType);
-    setFields((prev) => [...prev, newField]);
-    setSelectedField(newField);
+  // Helper function to check if we need to auto-create a step
+  const shouldAutoCreateStep = useCallback(
+    (currentFields, fieldType, insertIndex = -1) => {
+      // Don't auto-create step for layout/control fields
+      if (
+        fieldType === FIELD_TYPES.STEP ||
+        fieldType === FIELD_TYPES.HEADER ||
+        fieldType === FIELD_TYPES.PARAGRAPH ||
+        fieldType === FIELD_TYPES.DIVIDER ||
+        fieldType === FIELD_TYPES.SPACER
+      ) {
+        return false;
+      }
+
+      // Find the insertion point or use end of array
+      const checkIndex = insertIndex >= 0 ? insertIndex : currentFields.length;
+
+      // Count non-layout fields in the current step (before insertion point)
+      let currentStepFieldCount = 0;
+      let lastStepIndex = -1;
+
+      // Find the last step break before insertion point
+      for (let i = checkIndex - 1; i >= 0; i--) {
+        if (currentFields[i].type === FIELD_TYPES.STEP) {
+          lastStepIndex = i;
+          break;
+        }
+      }
+
+      // Count fields after the last step break (or from beginning if no step break)
+      for (let i = lastStepIndex + 1; i < checkIndex; i++) {
+        if (
+          currentFields[i].type !== FIELD_TYPES.STEP &&
+          currentFields[i].type !== FIELD_TYPES.HEADER &&
+          currentFields[i].type !== FIELD_TYPES.PARAGRAPH &&
+          currentFields[i].type !== FIELD_TYPES.DIVIDER &&
+          currentFields[i].type !== FIELD_TYPES.SPACER
+        ) {
+          currentStepFieldCount++;
+        }
+      }
+
+      return currentStepFieldCount >= 10;
+    },
+    []
+  );
+
+  // Helper function to create auto step
+  const createAutoStep = useCallback((currentStepCount) => {
+    const stepBreak = createField(FIELD_TYPES.STEP);
+    stepBreak.title = `Step ${Math.floor(currentStepCount / 10) + 2}`;
+    return stepBreak;
   }, []);
+
+  const handleAddField = useCallback(
+    (fieldType) => {
+      const newField = createField(fieldType);
+
+      setFields((prev) => {
+        const newFields = [...prev];
+
+        // Check if we need to auto-create a step
+        if (shouldAutoCreateStep(prev, fieldType)) {
+          const stepBreak = createAutoStep(prev.length);
+          newFields.push(stepBreak);
+          toast.success(`Automatically created new step after 10 fields!`);
+        }
+
+        newFields.push(newField);
+        return newFields;
+      });
+
+      setSelectedField(newField);
+    },
+    [shouldAutoCreateStep, createAutoStep]
+  );
 
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
@@ -187,7 +323,19 @@ const FormBuilder = () => {
         over.id === "form-builder-area" ||
         !fields.find((f) => f.id === over.id)
       ) {
-        setFields((prev) => [...prev, newField]);
+        setFields((prev) => {
+          const newFields = [...prev];
+
+          // Check if we need to auto-create a step
+          if (shouldAutoCreateStep(prev, fieldType)) {
+            const stepBreak = createAutoStep(prev.length);
+            newFields.push(stepBreak);
+            toast.success(`Automatically created new step after 10 fields!`);
+          }
+
+          newFields.push(newField);
+          return newFields;
+        });
         setSelectedField(newField);
         return;
       }
@@ -196,9 +344,21 @@ const FormBuilder = () => {
       const overIndex = fields.findIndex((f) => f.id === over.id);
       const insertIndex = overIndex >= 0 ? overIndex + 1 : fields.length;
 
-      const newFields = [...fields];
-      newFields.splice(insertIndex, 0, newField);
-      setFields(newFields);
+      setFields((prev) => {
+        const newFields = [...prev];
+
+        // Check if we need to auto-create a step at insertion point
+        if (shouldAutoCreateStep(prev, fieldType, insertIndex)) {
+          const stepBreak = createAutoStep(insertIndex);
+          newFields.splice(insertIndex, 0, stepBreak);
+          newFields.splice(insertIndex + 1, 0, newField);
+          toast.success(`Automatically created new step after 10 fields!`);
+        } else {
+          newFields.splice(insertIndex, 0, newField);
+        }
+
+        return newFields;
+      });
       setSelectedField(newField);
       return;
     }
@@ -235,13 +395,130 @@ const FormBuilder = () => {
     setSelectedField(null);
   };
 
+  const handleFormNameSubmit = () => {
+    const trimmedName = tempFormName.trim();
+    if (!trimmedName) {
+      toast.error("Form name is required");
+      return;
+    }
+    if (trimmedName.length < 3) {
+      toast.error("Form name must be at least 3 characters");
+      return;
+    }
+    if (trimmedName.length > 100) {
+      toast.error("Form name cannot exceed 100 characters");
+      return;
+    }
+    setFormName(trimmedName);
+    setShowNameDialog(false);
+  };
+
+  const handleFormNameCancel = () => {
+    setTempFormName("");
+    setShowNameDialog(false);
+  };
+
+  const handleEditFormName = () => {
+    setTempFormName(formName);
+    setShowNameDialog(true);
+  };
+
   const handleClearForm = () => {
     setFields([]);
     setSelectedField(null);
+    setPreviewData({});
+    setIsFormComplete(false);
+  };
+
+  const handlePreviewNext = () => {
+    // Validate that all required fields are filled
+    const requiredFields = fields.filter((field) => field.required);
+    const missingFields = requiredFields.filter(
+      (field) =>
+        !previewData[field.id] ||
+        (typeof previewData[field.id] === "string" &&
+          previewData[field.id].trim() === "")
+    );
+
+    if (missingFields.length > 0) {
+      toast.error(
+        `Please fill all required fields: ${missingFields
+          .map((f) => f.label)
+          .join(", ")}`
+      );
+      return;
+    }
+
+    setIsFormComplete(true);
+    toast.success("Form completed successfully!");
+  };
+
+  const handlePreviewSubmit = () => {
+    toast.success("Form submitted successfully!");
+    setShowPreview(false);
+    setPreviewData({});
+    setIsFormComplete(false);
+  };
+
+  const handleSaveForm = async () => {
+    // Validate form name before saving
+    const trimmedFormName = formName.trim();
+    if (!trimmedFormName) {
+      toast.error("Form name is required");
+      return;
+    }
+    if (trimmedFormName.length < 3) {
+      toast.error("Form name must be at least 3 characters");
+      return;
+    }
+    if (trimmedFormName.length > 100) {
+      toast.error("Form name cannot exceed 100 characters");
+      return;
+    }
+
+    try {
+      const formData = {
+        formName: trimmedFormName,
+        fields,
+        metadata: {
+          created: new Date().toISOString(),
+          version: "1.0",
+        },
+      };
+
+      const response = await fetch("http://localhost:5001/api/forms/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Form saved successfully:", result);
+        toast.success("Form saved successfully!");
+      } else {
+        const errorData = await response.json();
+
+        // Handle validation errors from backend
+        if (errorData.errors && Array.isArray(errorData.errors)) {
+          errorData.errors.forEach((error) => {
+            toast.error(error.msg || error.message || "Validation error");
+          });
+        } else {
+          toast.error(errorData.message || "Failed to save form");
+        }
+      }
+    } catch (error) {
+      console.error("Error saving form:", error);
+      toast.error(`Error saving form: ${error.message}`);
+    }
   };
 
   const handleExportForm = () => {
     const formData = {
+      formName,
       fields,
       metadata: {
         created: new Date().toISOString(),
@@ -256,7 +533,9 @@ const FormBuilder = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "form-config.json";
+    a.download = `${formName
+      .replace(/[^a-z0-9]/gi, "_")
+      .toLowerCase()}-config.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -281,6 +560,134 @@ const FormBuilder = () => {
     event.target.value = "";
   };
 
+  const sidebarWidth = 300;
+
+  const renderSidebar = () => <FieldTypes onAddField={handleAddField} />;
+
+  const renderToolbar = () => (
+    <Paper
+      elevation={1}
+      sx={{
+        borderRadius: 0,
+        borderBottom: "1px solid",
+        borderColor: "divider",
+      }}
+    >
+      {/* Form Name Section */}
+      <Box
+        sx={{
+          p: isMobile ? 1.5 : 2,
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: isMobile ? "wrap" : "nowrap",
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {isMobile && (
+              <IconButton onClick={() => setSidebarOpen(true)} sx={{ mr: 1 }}>
+                <MenuIcon />
+              </IconButton>
+            )}
+            <Typography
+              variant={isMobile ? "h6" : "h5"}
+              fontWeight="bold"
+              sx={{
+                flexShrink: 0,
+                cursor: "pointer",
+                "&:hover": {
+                  color: "primary.main",
+                },
+              }}
+              onClick={handleEditFormName}
+            >
+              {formName}
+            </Typography>
+            <Tooltip title="Edit Form Name">
+              <IconButton
+                size="small"
+                onClick={handleEditFormName}
+                sx={{
+                  ml: 0.5,
+                  color: "text.secondary",
+                  "&:hover": {
+                    color: "primary.main",
+                  },
+                }}
+              >
+                <EditNoteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              flexWrap: isMobile ? "wrap" : "nowrap",
+              justifyContent: isMobile ? "center" : "flex-end",
+              width: isMobile ? "100%" : "auto",
+              mt: isMobile ? 1 : 0,
+            }}
+          >
+            <Button
+              variant="outlined"
+              size={isMobile ? "small" : "medium"}
+              onClick={() => setShowPreview(!showPreview)}
+              disabled={fields.length === 0}
+            >
+              {showPreview ? "Edit" : "Preview"}
+            </Button>
+
+            <Button
+              variant="outlined"
+              size={isMobile ? "small" : "medium"}
+              onClick={handleClearForm}
+            >
+              Clear
+            </Button>
+
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              id="import-form"
+              onChange={handleImportForm}
+            />
+
+            <Button
+              variant="contained"
+              size={isMobile ? "small" : "medium"}
+              onClick={handleSaveForm}
+              disabled={
+                fields.length === 0 ||
+                !formName.trim() ||
+                formName.trim().length < 3
+              }
+              color="primary"
+            >
+              Save
+            </Button>
+
+            <Button
+              variant="outlined"
+              size={isMobile ? "small" : "medium"}
+              onClick={handleExportForm}
+              disabled={fields.length === 0}
+            >
+              Export
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+    </Paper>
+  );
+
   return (
     <DndContext
       sensors={sensors}
@@ -289,63 +696,59 @@ const FormBuilder = () => {
       onDragEnd={handleDragEnd}
       modifiers={[restrictToWindowEdges]}
     >
-      <Box sx={{ display: "flex", height: "100vh" }}>
-        {/* Field Types Sidebar */}
-        <FieldTypes onAddField={handleAddField} />
+      <Box
+        sx={{
+          display: "flex",
+          height: "100vh",
+          flexDirection: isMobile ? "column" : "row",
+        }}
+      >
+        {/* Desktop Sidebar */}
+        {!isMobile && renderSidebar()}
+
+        {/* Mobile Drawer */}
+        {isMobile && (
+          <Drawer
+            anchor="left"
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            sx={{
+              "& .MuiDrawer-paper": {
+                width: sidebarWidth,
+                boxSizing: "border-box",
+              },
+            }}
+          >
+            <Box sx={{ display: "flex", justifyContent: "flex-end", p: 1 }}>
+              <IconButton onClick={() => setSidebarOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+            {renderSidebar()}
+          </Drawer>
+        )}
 
         {/* Main Form Builder Area */}
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0, // Important for proper scrolling
+          }}
+        >
           {/* Toolbar */}
-          <Paper sx={{ p: 2, borderRadius: 0 }}>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Typography variant="h5" fontWeight="bold">
-                Form Builder
-              </Typography>
-
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  onClick={() => setShowPreview(!showPreview)}
-                >
-                  {showPreview ? "Edit Mode" : "Preview"}
-                </Button>
-
-                <Button variant="outlined" onClick={handleClearForm}>
-                  Clear All
-                </Button>
-
-                <input
-                  type="file"
-                  accept=".json"
-                  style={{ display: "none" }}
-                  id="import-form"
-                  onChange={handleImportForm}
-                />
-                <label htmlFor="import-form">
-                  <Button variant="outlined" component="span">
-                    Import
-                  </Button>
-                </label>
-
-                <Button
-                  variant="contained"
-                  onClick={handleExportForm}
-                  disabled={fields.length === 0}
-                >
-                  Export
-                </Button>
-              </Box>
-            </Box>
-          </Paper>
+          {renderToolbar()}
 
           {/* Form Building Area */}
-          <Box sx={{ flex: 1, p: 2, overflow: "auto" }}>
+          <Box
+            sx={{
+              flex: 1,
+              p: isMobile ? 1 : 2,
+              overflow: "auto",
+              position: "relative",
+            }}
+          >
             {showPreview ? (
               <FormPreview fields={fields} />
             ) : (
@@ -353,15 +756,21 @@ const FormBuilder = () => {
                 {fields.length === 0 ? (
                   <>
                     <Typography
-                      variant="h6"
+                      variant={isMobile ? "body1" : "h6"}
                       color="text.secondary"
                       gutterBottom
+                      textAlign="center"
                     >
                       Start Building Your Form
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Drag field types from the left sidebar or click on them to
-                      add to your form
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      textAlign="center"
+                    >
+                      {isMobile
+                        ? "Tap the menu button to add fields"
+                        : "Drag field types from the left sidebar or click on them to add to your form"}
                     </Typography>
                   </>
                 ) : (
@@ -376,11 +785,28 @@ const FormBuilder = () => {
                         onEdit={handleEditField}
                         onDelete={handleDeleteField}
                         isSelected={selectedField?.id === field.id}
+                        isMobile={isMobile}
                       />
                     ))}
                   </SortableContext>
                 )}
               </DroppableArea>
+            )}
+
+            {/* Mobile FAB for adding fields */}
+            {isMobile && !showPreview && (
+              <Fab
+                color="primary"
+                sx={{
+                  position: "fixed",
+                  bottom: 16,
+                  right: 16,
+                  zIndex: 1000,
+                }}
+                onClick={() => setSidebarOpen(true)}
+              >
+                <AddIcon />
+              </Fab>
             )}
           </Box>
         </Box>
@@ -392,6 +818,7 @@ const FormBuilder = () => {
             onUpdate={handleUpdateField}
             onClose={handleCloseConfig}
             allFields={fields}
+            isMobile={isMobile}
           />
         )}
 
@@ -409,6 +836,44 @@ const FormBuilder = () => {
             </Paper>
           ) : null}
         </DragOverlay>
+
+        {/* Form Name Dialog */}
+        <Dialog
+          open={showNameDialog}
+          onClose={handleFormNameCancel}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            {formName === "Form Builder" ? "Enter Form Name" : "Edit Form Name"}
+          </DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Form Name"
+              fullWidth
+              variant="outlined"
+              value={tempFormName}
+              onChange={(e) => setTempFormName(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  handleFormNameSubmit();
+                }
+              }}
+              helperText="Form name must be between 3 and 100 characters"
+              error={
+                tempFormName.trim().length > 0 && tempFormName.trim().length < 3
+              }
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleFormNameCancel}>Cancel</Button>
+            <Button onClick={handleFormNameSubmit} variant="contained">
+              OK
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </DndContext>
   );

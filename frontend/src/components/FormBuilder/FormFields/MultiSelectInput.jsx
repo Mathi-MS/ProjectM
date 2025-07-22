@@ -1,15 +1,15 @@
-import React from 'react';
-import { 
-  FormControl, 
-  InputLabel, 
-  Select, 
-  MenuItem, 
+import React from "react";
+import {
+  FormControl,
+  Select,
+  MenuItem,
   FormHelperText,
   Chip,
   Box,
-  OutlinedInput
-} from '@mui/material';
-import { Controller } from 'react-hook-form';
+  OutlinedInput,
+} from "@mui/material";
+import { Controller } from "react-hook-form";
+import FieldLabel from "../FieldLabel";
 
 const ITEM_HEIGHT = 48;
 const ITEM_PADDING_TOP = 8;
@@ -29,43 +29,63 @@ const MultiSelectInput = ({ field, control, errors, disabled = false }) => {
       control={control}
       defaultValue={[]}
       rules={{
-        required: field.required ? `${field.label} is required` : false
+        required: field.required ? `${field.label} is required` : false,
       }}
       render={({ field: controllerField }) => (
-        <FormControl fullWidth error={!!errors[field.name]} disabled={disabled}>
-          <InputLabel>{field.label}</InputLabel>
-          <Select
-            {...controllerField}
-            multiple
-            input={<OutlinedInput label={field.label} />}
-            renderValue={(selected) => (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {selected.map((value) => {
-                  const option = field.options?.find(opt => opt.value === value);
-                  return (
-                    <Chip 
-                      key={value} 
-                      label={option?.label || value} 
-                      size="small" 
-                    />
-                  );
-                })}
-              </Box>
-            )}
-            MenuProps={MenuProps}
+        <Box>
+          <FieldLabel
+            label={field.label}
+            required={field.required}
+            helperText={field.helperText}
+          />
+          <FormControl
+            fullWidth
+            error={!!errors[field.name]}
+            disabled={disabled}
           >
-            {field.options?.map((option, index) => (
-              <MenuItem key={index} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-          {(errors[field.name]?.message || field.helperText) && (
-            <FormHelperText>
-              {errors[field.name]?.message || field.helperText}
-            </FormHelperText>
-          )}
-        </FormControl>
+            <Select
+              {...controllerField}
+              multiple
+              displayEmpty
+              input={<OutlinedInput />}
+              renderValue={(selected) => {
+                if (!selected || selected.length === 0) {
+                  return (
+                    <em style={{ color: "#999" }}>
+                      {field.placeholder || "Select options"}
+                    </em>
+                  );
+                }
+                return (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {selected.map((value) => {
+                      const option = field.options?.find(
+                        (opt) => opt.value === value
+                      );
+                      return (
+                        <Chip
+                          key={value}
+                          label={option?.label || value}
+                          size="small"
+                        />
+                      );
+                    })}
+                  </Box>
+                );
+              }}
+              MenuProps={MenuProps}
+            >
+              {field.options?.map((option, index) => (
+                <MenuItem key={index} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+            {errors[field.name]?.message && (
+              <FormHelperText>{errors[field.name]?.message}</FormHelperText>
+            )}
+          </FormControl>
+        </Box>
       )}
     />
   );

@@ -10,4 +10,11 @@ export const apiUrls = {
   createUser: "users",
   updateUser: (id) => `users/${id}`,
   deleteUser: (id) => `users/${id}`,
+
+  // Form management endpoints
+  forms: "forms",
+  saveForm: "forms/save",
+  formById: (id) => `forms/${id}`,
+  updateForm: (id) => `forms/${id}`,
+  deleteForm: (id) => `forms/${id}`,
 };
