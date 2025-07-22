@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Form Builder Test</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          sans-serif;
+      }
+      .container {
+        padding: 20px;
+      }
+      .instructions {
+        background: #f0f8ff;
+        border: 1px solid #0066cc;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .instructions h2 {
+        color: #0066cc;
+        margin-top: 0;
+      }
+      .instructions ol {
+        margin: 10px 0;
+      }
+      .instructions li {
+        margin: 5px 0;
+      }
+      .note {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🧪 Form Builder Drag & Drop Test</h1>
+
+      <div class="instructions">
+        <h2>Testing Instructions</h2>
+        <p>To test the drag and drop functionality that has been fixed:</p>
+        <ol>
+          <li>
+            <strong>Start the development server:</strong> <br /><code
+              >cd frontend && npm run dev</code
+            >
+          </li>
+          <li>
+            <strong>Navigate to the form builder:</strong> <br />Go to
+            <code>http://localhost:3004/#/form-builder-demo</code> <br />Or
+            access it through the main app after logging in
+          </li>
+          <li>
+            <strong>Test drag functionality:</strong>
+            <ul>
+              <li>
+                Try dragging field types from the left sidebar to the main form
+                area
+              </li>
+              <li>
+                When the form is empty, you should see a highlighted drop zone
+              </li>
+              <li>
+                When fields exist, you can drag new fields between existing ones
+              </li>
+              <li>You can also reorder existing fields by dragging them</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Test click functionality:</strong>
+            <ul>
+              <li>
+                Click on any field type in the sidebar to add it to the form
+              </li>
+              <li>This should work as an alternative to dragging</li>
+            </ul>
+          </li>
+        </ol>
+
+        <div class="note">
+          <strong>🔧 Fixes Applied:</strong>
+          <ul>
+            <li>Added proper droppable area for empty forms</li>
+            <li>Improved drag detection with activation constraints</li>
+            <li>Enhanced visual feedback during drag operations</li>
+            <li>Fixed collision detection for better responsiveness</li>
+            <li>Added better drag overlay with descriptive text</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="instructions">
+        <h2>🐛 If Issues Persist</h2>
+        <p>If drag and drop still doesn't work properly, check:</p>
+        <ul>
+          <li>Browser console for any JavaScript errors</li>
+          <li>Ensure all @dnd-kit dependencies are properly installed</li>
+          <li>Try refreshing the page or clearing browser cache</li>
+          <li>Test in a different browser (Chrome, Firefox, Safari)</li>
+        </ul>
+      </div>
+    </div>
+  </body>
+</html>

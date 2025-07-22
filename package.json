@@ -1,0 +1,30 @@
+{
+  "name": "fullstack-app",
+  "version": "1.0.0",
+  "description": "Full-stack application with React frontend and Node.js backend",
+  "main": "backend/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "react",
+    "nodejs",
+    "mui",
+    "vite",
+    "fullstack",
+    "zod"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "js-cookie": "^3.0.5"
+  }
+}
