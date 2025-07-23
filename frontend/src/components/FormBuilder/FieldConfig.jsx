@@ -20,19 +20,26 @@ import {
   Drawer,
   useMediaQuery,
   useTheme,
+  Alert,
+  Collapse,
 } from "@mui/material";
 import {
   ExpandMore as ExpandMoreIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
   Close as CloseIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
 } from "@mui/icons-material";
+import toast from "react-hot-toast";
 import { FIELD_TYPES, GRID_SIZES } from "./constants";
 
 const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
   const [config, setConfig] = useState(field);
   const [errors, setErrors] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [showValidationAlert, setShowValidationAlert] = useState(false);
+  const [validationSummary, setValidationSummary] = useState([]);
   const theme = useTheme();
   const isTablet = useMediaQuery(theme.breakpoints.down("lg"));
 
@@ -40,6 +47,8 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
     setConfig(field);
     setErrors({});
     setHasChanges(false);
+    setShowValidationAlert(false);
+    setValidationSummary([]);
   }, [field]);
 
   const handleChange = (key, value) => {
@@ -50,6 +59,11 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
     // Clear error for this field when user starts typing
     if (errors[key]) {
       setErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
+
+    // Hide validation alert when user makes changes
+    if (showValidationAlert) {
+      setShowValidationAlert(false);
     }
   };
 
@@ -91,16 +105,21 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
 
   const validateConfig = () => {
     const newErrors = {};
+    const summary = [];
 
     // Validate required fields
     if (!config.name || config.name.trim() === "") {
       newErrors.name = "Field name is required";
+      summary.push("Field name is required");
     }
 
     // Validate field name format (only lowercase letters and underscores)
     if (config.name && !/^[a-z_]+$/.test(config.name)) {
       newErrors.name =
         "Field name must contain only lowercase letters and underscores";
+      summary.push(
+        "Field name must contain only lowercase letters and underscores"
+      );
     }
 
     // Check for duplicate field names
@@ -110,6 +129,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       allFields.some((f) => f.id !== config.id && f.name === config.name)
     ) {
       newErrors.name = "Field name must be unique";
+      summary.push("Field name must be unique");
     }
 
     // Validate placeholder is required for applicable field types
@@ -130,6 +150,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       (!config.placeholder || config.placeholder.trim() === "")
     ) {
       newErrors.placeholder = "Placeholder is required for this field type";
+      summary.push("Placeholder is required for this field type");
     }
 
     // Validate label for visible fields
@@ -140,6 +161,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       (!config.label || config.label.trim() === "")
     ) {
       newErrors.label = "Label is required for this field type";
+      summary.push("Label is required for this field type");
     }
 
     // Validate options for select fields
@@ -150,6 +172,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       (!config.options || config.options.length === 0)
     ) {
       newErrors.options = "At least one option is required";
+      summary.push("At least one option is required");
     }
 
     // Validate option values
@@ -159,6 +182,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       );
       if (hasEmptyOption) {
         newErrors.options = "All options must have both label and value";
+        summary.push("All options must have both label and value");
       }
     }
 
@@ -169,6 +193,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       (!config.text || config.text.trim() === "")
     ) {
       newErrors.text = "Text content is required";
+      summary.push("Text content is required");
     }
 
     // Validate validation rules
@@ -180,6 +205,7 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       ) {
         newErrors.validation =
           "Minimum length cannot be greater than maximum length";
+        summary.push("Minimum length cannot be greater than maximum length");
       }
 
       if (
@@ -189,18 +215,55 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
       ) {
         newErrors.validation =
           "Minimum value cannot be greater than maximum value";
+        summary.push("Minimum value cannot be greater than maximum value");
       }
     }
 
     setErrors(newErrors);
+    setValidationSummary(summary);
+
+    if (Object.keys(newErrors).length > 0) {
+      setShowValidationAlert(true);
+    }
+
     return Object.keys(newErrors).length === 0;
+  };
+
+  const getCriticalErrors = () => {
+    const critical = [];
+    if (!config.name || config.name.trim() === "") {
+      critical.push("Field name");
+    }
+    if (
+      config.type !== FIELD_TYPES.HIDDEN &&
+      config.type !== FIELD_TYPES.DIVIDER &&
+      config.type !== FIELD_TYPES.SPACER &&
+      (!config.label || config.label.trim() === "")
+    ) {
+      critical.push("Label");
+    }
+    return critical;
   };
 
   const handleSave = () => {
     if (validateConfig()) {
       onUpdate(config);
       setHasChanges(false);
+      toast.success(
+        `Field "${config.label || config.name}" updated successfully!`
+      );
       onClose();
+    } else {
+      const criticalErrors = getCriticalErrors();
+      if (criticalErrors.length > 0) {
+        toast.error(
+          `Please complete required fields: ${criticalErrors.join(", ")}`
+        );
+      } else {
+        toast.error(
+          "Please complete all required field details before saving."
+        );
+      }
     }
   };
 
@@ -215,6 +278,9 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
         setConfig(field); // Reset to original values
         setErrors({});
         setHasChanges(false);
+        setShowValidationAlert(false);
+        setValidationSummary([]);
+        toast.info("Changes discarded");
         onClose();
       }
     } else {
@@ -861,6 +927,27 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
 
       <Chip label={config.type} color="primary" size="small" sx={{ mb: 2 }} />
 
+      {/* Validation Alert */}
+      <Collapse in={showValidationAlert}>
+        <Alert
+          severity="error"
+          icon={<WarningIcon />}
+          sx={{ mb: 2 }}
+          onClose={() => setShowValidationAlert(false)}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+            Please complete the following required fields:
+          </Typography>
+          <Box component="ul" sx={{ pl: 2, m: 0 }}>
+            {validationSummary.map((error, index) => (
+              <Typography component="li" key={index} variant="body2">
+                {error}
+              </Typography>
+            ))}
+          </Box>
+        </Alert>
+      </Collapse>
+
       {renderBasicSettings()}
       {renderValidationSettings()}
 
@@ -890,6 +977,11 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
           fullWidth
           size="large"
           disabled={!hasChanges}
+          startIcon={
+            hasChanges && Object.keys(errors).length === 0 ? (
+              <CheckCircleIcon />
+            ) : null
+          }
         >
           {hasChanges ? "Save Changes" : "No Changes"}
         </Button>

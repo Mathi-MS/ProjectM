@@ -22,9 +22,19 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@playwright/test": "^1.54.1",
     "concurrently": "^8.2.2"
   },
   "dependencies": {
     "js-cookie": "^3.0.5"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mathi-MS/ProjectM.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Mathi-MS/ProjectM/issues"
+  },
+  "homepage": "https://github.com/Mathi-MS/ProjectM#readme"
 }
