@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import { useForm } from "react-hook-form";
 import FormRenderer from "./FormRenderer";
-import { generateFormSteps } from "./utils";
+import { generateFormSteps, serializeFormData } from "./utils";
 import { FIELD_TYPES } from "./constants";
 
 const FormPreview = ({ fields }) => {
@@ -96,7 +96,9 @@ const FormPreview = ({ fields }) => {
 
     // Only submit if we're on the last step
     if (isLastStep) {
-      setSubmittedData(data);
+      // Serialize form data to handle File objects properly
+      const serializedData = serializeFormData(data);
+      setSubmittedData(serializedData);
     } else {
       console.log("Preventing submission - not on last step");
       return false;

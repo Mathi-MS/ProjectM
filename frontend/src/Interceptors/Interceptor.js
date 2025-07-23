@@ -20,7 +20,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = Cookies.get("PRT_token");
+    const token = Cookies.get("CableToken");
     setIsLoading(true);
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;

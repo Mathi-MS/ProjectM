@@ -196,3 +196,39 @@ export const generateFormSteps = (fields) => {
 
   return steps.length > 0 ? steps : [{ title: "Form", fields }];
 };
+
+// Serialize form data for display, converting File objects to readable format
+export const serializeFormData = (data) => {
+  const serialized = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    if (value instanceof File) {
+      // Single file
+      serialized[key] = {
+        name: value.name,
+        size: value.size,
+        type: value.type,
+        lastModified: new Date(value.lastModified).toISOString(),
+        sizeFormatted: formatFileSize(value.size),
+      };
+    } else if (
+      Array.isArray(value) &&
+      value.length > 0 &&
+      value[0] instanceof File
+    ) {
+      // Array of files
+      serialized[key] = value.map((file) => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: new Date(file.lastModified).toISOString(),
+        sizeFormatted: formatFileSize(file.size),
+      }));
+    } else {
+      // Regular value
+      serialized[key] = value;
+    }
+  }
+
+  return serialized;
+};

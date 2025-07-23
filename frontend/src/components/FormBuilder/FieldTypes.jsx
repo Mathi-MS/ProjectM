@@ -40,6 +40,8 @@ import {
 import { useDraggable } from "@dnd-kit/core";
 import { FIELD_TYPES, FIELD_CATEGORIES } from "./constants";
 import { createField } from "./utils";
+import { ArrowBack as ArrowBackIcon } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 
 const fieldIcons = {
   [FIELD_TYPES.TEXT]: TextFields,
@@ -123,7 +125,10 @@ const DraggableFieldType = ({ type, label, onAdd }) => {
 const FieldTypes = ({ onAddField }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+  const navigate = useNavigate();
+    const handleBack = () => {
+    navigate("/app/create-form");
+  };
   const handleAddField = (type) => {
     onAddField(type);
   };
@@ -169,10 +174,44 @@ const FieldTypes = ({ onAddField }) => {
         overflow: "auto",
         maxHeight: isMobile ? "calc(100vh - 120px)" : "100vh",
       }}
-    >
+    > 
+      <Box 
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "start",
+          gap: 1,
+        }}>
+        <Button
+            variant="outlined"
+            startIcon={<ArrowBackIcon />}
+            onClick={handleBack}
+            sx={{
+              borderColor: "#457860",
+              borderRadius: "200px",
+              color: "#457860",
+              padding:"0px",
+              width: "35px",
+              height: "35px",
+              minWidth:"max-content",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              "&:hover": {
+                borderColor: "#2d5a3d",
+                backgroundColor: "rgba(69, 120, 96, 0.04)",
+              },
+              "& span": {
+                margin:"0px"
+              },
+              
+            }}
+          >
+          </Button>
       <Typography variant="h6" gutterBottom>
         Field Types
       </Typography>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {isMobile ? "Tap to add fields" : "Drag fields to the form or click to add"}
       </Typography>

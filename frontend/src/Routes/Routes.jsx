@@ -4,7 +4,10 @@ import Dashboard from "../pages/Dashboard";
 import Profile from "../pages/Profile";
 import Users from "../pages/Users";
 import CreateForm from "../pages/CreateForm";
+import FormBuilder from "../pages/FormBuilder";
 import FormBuilderDemo from "../pages/FormBuilderDemo";
+import Forms from "../pages/Forms";
+import FormPreview from "../pages/FormPreview";
 import Layout from "../components/Layout";
 import ProtectedRoute from "../components/ProtectedRoute";
 import DemoProtectedRoute from "../components/DemoProtectedRoute";
@@ -51,6 +54,18 @@ const routes = createHashRouter([
       {
         path: "create-form",
         element: <CreateForm />,
+      },
+      {
+        path: "forms",
+        element: <Forms />,
+      },
+      {
+        path: "form-builder/:formId",
+        element: <FormBuilder />,
+      },
+      {
+        path: "forms/:formId/preview",
+        element: <FormPreview />,
       },
     ],
   },

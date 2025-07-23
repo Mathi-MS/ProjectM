@@ -809,6 +809,101 @@ app.post(
 
 // ============= FORM MANAGEMENT ENDPOINTS =============
 
+// Create new form endpoint (just name)
+app.post(
+  "/api/forms/create",
+  authenticateToken,
+  [
+    body("formName")
+      .trim()
+      .isLength({ min: 3, max: 100 })
+      .withMessage("Form name must be between 3 and 100 characters"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { formName } = req.body;
+
+      // Check if form name already exists for this user
+      const existingForm = await Form.findOne({
+        formName: formName,
+        createdBy: req.user.id,
+        isActive: true,
+      });
+
+      if (existingForm) {
+        return res.status(400).json({
+          message: "A form with this name already exists",
+        });
+      }
+
+      // Create new form with minimal data
+      const newForm = new Form({
+        formName,
+        fields: [],
+        metadata: {
+          created: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+          version: "1.0",
+        },
+        createdBy: req.user.id,
+        status: "inactive",
+      });
+
+      await newForm.save();
+
+      // Only populate if createdBy exists
+      if (newForm.createdBy) {
+        await newForm.populate("createdBy", "firstName lastName email");
+      }
+
+      res.status(201).json({
+        message: "Form created successfully",
+        form: {
+          id: newForm._id,
+          formName: newForm.formName,
+          status: newForm.status,
+          createdBy: newForm.createdBy
+            ? {
+                id: newForm.createdBy._id,
+                name: `${newForm.createdBy.firstName} ${newForm.createdBy.lastName}`,
+                email: newForm.createdBy.email,
+              }
+            : null,
+          createdAt: newForm.createdAt,
+          updatedAt: newForm.updatedAt,
+          fieldsCount: newForm.fields.length,
+        },
+      });
+    } catch (error) {
+      console.error("Form create error:", error);
+
+      // Handle mongoose validation errors
+      if (error.name === "ValidationError") {
+        const validationErrors = Object.values(error.errors).map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validationErrors,
+        });
+      }
+
+      res.status(500).json({
+        message: "Internal server error while creating form",
+      });
+    }
+  }
+);
+
 // Save form endpoint
 app.post(
   "/api/forms/save",
@@ -878,7 +973,7 @@ app.post(
 );
 
 // Get all forms endpoint
-app.get("/api/forms", async (req, res) => {
+app.get("/api/forms", authenticateToken, async (req, res) => {
   try {
     const {
       page = 1,
@@ -902,10 +997,11 @@ app.get("/api/forms", async (req, res) => {
 
     // Get forms with pagination and sorting
     const forms = await Form.find(searchQuery)
+      .populate("createdBy", "firstName lastName email")
       .sort({ [sortBy]: sortDirection })
       .skip(skip)
       .limit(parseInt(limit))
-      .select("formName fields metadata createdAt updatedAt");
+      .select("formName fields metadata createdAt updatedAt status createdBy");
 
     // Get total count for pagination
     const totalForms = await Form.countDocuments(searchQuery);
@@ -916,10 +1012,17 @@ app.get("/api/forms", async (req, res) => {
       forms: forms.map((form) => ({
         id: form._id,
         formName: form.formName,
-        fieldsCount: form.fields.length,
+        status: form.status,
+        createdBy: form.createdBy
+          ? {
+              id: form.createdBy._id,
+              name: `${form.createdBy.firstName} ${form.createdBy.lastName}`,
+              email: form.createdBy.email,
+            }
+          : null,
         createdAt: form.createdAt,
         updatedAt: form.updatedAt,
-        metadata: form.metadata,
+        fieldsCount: form.fields.length,
       })),
       pagination: {
         currentPage: parseInt(page),
@@ -938,7 +1041,7 @@ app.get("/api/forms", async (req, res) => {
 });
 
 // Get form by ID endpoint
-app.get("/api/forms/:id", async (req, res) => {
+app.get("/api/forms/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -956,16 +1059,23 @@ app.get("/api/forms/:id", async (req, res) => {
       });
     }
 
+    // Check if the form belongs to the authenticated user
+    if (form.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "Access denied. You can only access your own forms.",
+      });
+    }
+
     res.json({
       message: "Form retrieved successfully",
-      form: {
-        id: form._id,
-        formName: form.formName,
-        fields: form.fields,
-        metadata: form.metadata,
-        createdAt: form.createdAt,
-        updatedAt: form.updatedAt,
-      },
+      _id: form._id,
+      id: form._id,
+      formName: form.formName,
+      fields: form.fields,
+      status: form.status,
+      metadata: form.metadata,
+      createdAt: form.createdAt,
+      updatedAt: form.updatedAt,
     });
   } catch (error) {
     console.error("Get form error:", error);
@@ -978,6 +1088,7 @@ app.get("/api/forms/:id", async (req, res) => {
 // Update form endpoint
 app.put(
   "/api/forms/:id",
+  authenticateToken,
   [
     body("formName")
       .optional()
@@ -1010,6 +1121,17 @@ app.put(
       if (!form || !form.isActive) {
         return res.status(404).json({
           message: "Form not found",
+        });
+      }
+
+      // Check if user owns this form or is admin
+      if (
+        form.createdBy &&
+        form.createdBy.toString() !== req.user.id &&
+        req.user.role !== "Admin"
+      ) {
+        return res.status(403).json({
+          message: "Access denied. You can only edit your own forms.",
         });
       }
 
@@ -1058,8 +1180,213 @@ app.put(
   }
 );
 
+// Update form name endpoint
+app.put(
+  "/api/forms/:id/name",
+  authenticateToken,
+  [
+    body("formName")
+      .trim()
+      .isLength({ min: 3, max: 100 })
+      .withMessage("Form name must be between 3 and 100 characters"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { id } = req.params;
+      const { formName } = req.body;
+
+      // Validate ObjectId
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({
+          message: "Invalid form ID format",
+        });
+      }
+
+      const form = await Form.findById(id);
+      if (!form || !form.isActive) {
+        return res.status(404).json({
+          message: "Form not found",
+        });
+      }
+
+      // Check if user owns this form or is admin
+      if (
+        form.createdBy &&
+        form.createdBy.toString() !== req.user.id &&
+        req.user.role !== "Admin"
+      ) {
+        return res.status(403).json({
+          message: "Access denied. You can only edit your own forms.",
+        });
+      }
+
+      // Check if form name already exists for this user
+      const existingForm = await Form.findOne({
+        formName: formName,
+        createdBy: req.user.id,
+        isActive: true,
+        _id: { $ne: id },
+      });
+
+      if (existingForm) {
+        return res.status(400).json({
+          message: "A form with this name already exists",
+        });
+      }
+
+      form.formName = formName;
+      await form.save();
+
+      // Only populate if createdBy exists
+      if (form.createdBy) {
+        await form.populate("createdBy", "firstName lastName email");
+      }
+
+      res.json({
+        message: "Form name updated successfully",
+        form: {
+          id: form._id,
+          formName: form.formName,
+          status: form.status,
+          createdBy: form.createdBy
+            ? {
+                id: form.createdBy._id,
+                name: `${form.createdBy.firstName} ${form.createdBy.lastName}`,
+                email: form.createdBy.email,
+              }
+            : null,
+          createdAt: form.createdAt,
+          updatedAt: form.updatedAt,
+          fieldsCount: form.fields.length,
+        },
+      });
+    } catch (error) {
+      console.error("Form name update error:", error);
+      console.error("Error stack:", error.stack);
+      console.error("Form ID:", req.params.id);
+      console.error("User ID:", req.user?.id);
+      console.error("Request body:", req.body);
+
+      // Handle mongoose validation errors
+      if (error.name === "ValidationError") {
+        const validationErrors = Object.values(error.errors).map((err) => ({
+          field: err.path,
+          message: err.message,
+        }));
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: validationErrors,
+        });
+      }
+
+      res.status(500).json({
+        message: "Internal server error while updating form name",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// Update form status endpoint
+app.put(
+  "/api/forms/:id/status",
+  authenticateToken,
+  [
+    body("status")
+      .isIn(["active", "inactive"])
+      .withMessage("Status must be either active or inactive"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { id } = req.params;
+      const { status } = req.body;
+
+      // Validate ObjectId
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({
+          message: "Invalid form ID format",
+        });
+      }
+
+      const form = await Form.findById(id);
+      if (!form || !form.isActive) {
+        return res.status(404).json({
+          message: "Form not found",
+        });
+      }
+
+      // Check if user owns this form or is admin
+      if (
+        form.createdBy &&
+        form.createdBy.toString() !== req.user.id &&
+        req.user.role !== "Admin"
+      ) {
+        return res.status(403).json({
+          message: "Access denied. You can only edit your own forms.",
+        });
+      }
+
+      form.status = status;
+      await form.save();
+
+      // Only populate if createdBy exists
+      if (form.createdBy) {
+        await form.populate("createdBy", "firstName lastName email");
+      }
+
+      res.json({
+        message: "Form status updated successfully",
+        form: {
+          id: form._id,
+          formName: form.formName,
+          status: form.status,
+          createdBy: form.createdBy
+            ? {
+                id: form.createdBy._id,
+                name: `${form.createdBy.firstName} ${form.createdBy.lastName}`,
+                email: form.createdBy.email,
+              }
+            : null,
+          createdAt: form.createdAt,
+          updatedAt: form.updatedAt,
+          fieldsCount: form.fields.length,
+        },
+      });
+    } catch (error) {
+      console.error("Form status update error:", error);
+      console.error("Error stack:", error.stack);
+      console.error("Form ID:", req.params.id);
+      console.error("User ID:", req.user?.id);
+      console.error("Request body:", req.body);
+
+      res.status(500).json({
+        message: "Internal server error while updating form status",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
 // Delete form endpoint (soft delete)
-app.delete("/api/forms/:id", async (req, res) => {
+app.delete("/api/forms/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1077,6 +1404,17 @@ app.delete("/api/forms/:id", async (req, res) => {
       });
     }
 
+    // Check if user owns this form or is admin
+    if (
+      form.createdBy &&
+      form.createdBy.toString() !== req.user.id &&
+      req.user.role !== "Admin"
+    ) {
+      return res.status(403).json({
+        message: "Access denied. You can only delete your own forms.",
+      });
+    }
+
     await form.softDelete();
 
     res.json({
@@ -1084,8 +1422,13 @@ app.delete("/api/forms/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Form delete error:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Form ID:", req.params.id);
+    console.error("User ID:", req.user?.id);
+
     res.status(500).json({
       message: "Internal server error while deleting form",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 });

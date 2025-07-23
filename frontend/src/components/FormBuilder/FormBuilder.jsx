@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  CircularProgress,
 } from "@mui/material";
 import toast from "react-hot-toast";
 import {
@@ -55,6 +56,7 @@ import FieldConfig from "./FieldConfig";
 import FormPreview from "./FormPreview";
 import { createField, deepClone } from "./utils";
 import { FIELD_TYPES } from "./constants";
+import { useForm, useUpdateForm } from "../../hooks/useForms";
 
 const DroppableArea = ({ children, isEmpty }) => {
   const { isOver, setNodeRef } = useDroppable({
@@ -198,18 +200,26 @@ const SortableFieldItem = ({
   );
 };
 
-const FormBuilder = () => {
+const FormBuilder = ({ formId, onSave }) => {
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [formName, setFormName] = useState("Form Builder");
-  const [showNameDialog, setShowNameDialog] = useState(true);
+  const [showNameDialog, setShowNameDialog] = useState(!formId); // Don't show dialog if editing existing form
   const [tempFormName, setTempFormName] = useState("");
 
   const [previewData, setPreviewData] = useState({});
   const [isFormComplete, setIsFormComplete] = useState(false);
+
+  // API hooks
+  const {
+    data: formData,
+    isLoading: isLoadingForm,
+    error: loadError,
+  } = useForm(formId);
+  const updateFormMutation = useUpdateForm();
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -272,6 +282,15 @@ const FormBuilder = () => {
     },
     []
   );
+
+  // Load form data when formId changes
+  useEffect(() => {
+    if (formData) {
+      setFormName(formData.formName);
+      setTempFormName(formData.formName);
+      setFields(formData.fields || []);
+    }
+  }, [formData]);
 
   // Helper function to create auto step
   const createAutoStep = useCallback((currentStepCount) => {
@@ -486,33 +505,22 @@ const FormBuilder = () => {
         },
       };
 
-      const response = await fetch("http://localhost:5001/api/forms/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
+      if (formId) {
+        // Update existing form
+        await updateFormMutation.mutateAsync({
+          id: formId,
+          formData,
+        });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log("Form saved successfully:", result);
-        toast.success("Form saved successfully!");
-      } else {
-        const errorData = await response.json();
-
-        // Handle validation errors from backend
-        if (errorData.errors && Array.isArray(errorData.errors)) {
-          errorData.errors.forEach((error) => {
-            toast.error(error.msg || error.message || "Validation error");
-          });
-        } else {
-          toast.error(errorData.message || "Failed to save form");
+        // Call onSave callback if provided (for navigation)
+        if (onSave) {
+          onSave();
         }
+      } else {
+        toast.error("No form ID provided for saving");
       }
     } catch (error) {
-      console.error("Error saving form:", error);
-      toast.error(`Error saving form: ${error.message}`);
+      // Error handling is done by the mutation
     }
   };
 
@@ -687,6 +695,36 @@ const FormBuilder = () => {
       </Box>
     </Paper>
   );
+
+  // Loading state for form data
+  if (formId && isLoadingForm) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Error state for form loading
+  if (formId && loadError) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError.message || "Failed to load form"}
+        </Alert>
+        <Button onClick={() => window.history.back()} variant="contained">
+          Go Back
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <DndContext

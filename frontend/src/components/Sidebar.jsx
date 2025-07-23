@@ -47,6 +47,25 @@ const Sidebar = ({ open = false, onClose, collapsed = false }) => {
     }
   };
 
+  // Helper function to check if a menu item should be selected
+  const isMenuItemSelected = (itemPath) => {
+    // Direct path match
+    if (location.pathname === itemPath) {
+      return true;
+    }
+
+    // Special case: FormBuilder and FormPreview should highlight "Create Form"
+    if (itemPath === "/app/create-form") {
+      return (
+        location.pathname.startsWith("/app/form-builder/") ||
+        location.pathname.includes("/app/forms/") ||
+        location.pathname === "/app/create-form"
+      );
+    }
+
+    return false;
+  };
+
   const drawerContent = (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Project Header Section */}
@@ -106,7 +125,7 @@ const Sidebar = ({ open = false, onClose, collapsed = false }) => {
             <ListItem key={item.text} disablePadding>
               <ListItemButton
                 onClick={() => handleNavigation(item.path)}
-                selected={location.pathname === item.path}
+                selected={isMenuItemSelected(item.path)}
                 sx={{
                   mx: 1,
                   borderRadius: 1,
@@ -141,8 +160,9 @@ const Sidebar = ({ open = false, onClose, collapsed = false }) => {
               >
                 <ListItemIcon
                   sx={{
-                    color:
-                      location.pathname === item.path ? "#457860" : "inherit",
+                    color: isMenuItemSelected(item.path)
+                      ? "#457860"
+                      : "inherit",
                     minWidth: 44,
                     "& .MuiSvgIcon-root": {
                       fontSize: "1.25rem",
@@ -156,7 +176,7 @@ const Sidebar = ({ open = false, onClose, collapsed = false }) => {
                   sx={{
                     "& .MuiListItemText-primary": {
                       fontSize: "0.875rem",
-                      fontWeight: location.pathname === item.path ? 600 : 400,
+                      fontWeight: isMenuItemSelected(item.path) ? 600 : 400,
                     },
                   }}
                 />
