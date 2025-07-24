@@ -17,6 +17,11 @@ import {
   DialogActions,
   TextField,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Avatar,
 } from "@mui/material";
 import toast from "react-hot-toast";
 import {
@@ -47,6 +52,8 @@ import {
   Close as CloseIcon,
   Add as AddIcon,
   EditNote as EditNoteIcon,
+  People as PeopleIcon,
+  Person as PersonIcon,
 } from "@mui/icons-material";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -57,6 +64,7 @@ import FormPreview from "./FormPreview";
 import { createField, deepClone } from "./utils";
 import { FIELD_TYPES } from "./constants";
 import { useForm, useUpdateForm } from "../../hooks/useForms";
+import { useUsers } from "../../hooks/useAuth";
 
 const DroppableArea = ({ children, isEmpty }) => {
   const { isOver, setNodeRef } = useDroppable({
@@ -210,6 +218,12 @@ const FormBuilder = ({ formId, onSave }) => {
   const [showNameDialog, setShowNameDialog] = useState(!formId); // Don't show dialog if editing existing form
   const [tempFormName, setTempFormName] = useState("");
 
+  // Role management state
+  const [initiator, setInitiator] = useState(null);
+  const [reviewer, setReviewer] = useState(null);
+  const [approver, setApprover] = useState(null);
+  const [showRoleDialog, setShowRoleDialog] = useState(false);
+
   const [previewData, setPreviewData] = useState({});
   const [isFormComplete, setIsFormComplete] = useState(false);
 
@@ -220,6 +234,21 @@ const FormBuilder = ({ formId, onSave }) => {
     error: loadError,
   } = useForm(formId);
   const updateFormMutation = useUpdateForm();
+
+  // Users data for select dropdowns
+  const {
+    data: usersData,
+    isLoading: usersLoading,
+    error: usersError,
+  } = useUsers({
+    page: 1,
+    limit: 100,
+    search: "",
+    sortBy: "firstName",
+    sortOrder: "asc",
+  });
+
+  const users = usersData?.users || [];
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -289,6 +318,11 @@ const FormBuilder = ({ formId, onSave }) => {
       setFormName(formData.formName);
       setTempFormName(formData.formName);
       setFields(formData.fields || []);
+
+      // Load role information
+      setInitiator(formData.initiator?.id || null);
+      setReviewer(formData.reviewer?.id || null);
+      setApprover(formData.approver?.id || null);
     }
   }, [formData]);
 
@@ -495,6 +529,20 @@ const FormBuilder = ({ formId, onSave }) => {
       return;
     }
 
+    // Validate required roles
+    if (!initiator) {
+      toast.error("Initiator is required");
+      return;
+    }
+    if (!reviewer) {
+      toast.error("Reviewer is required");
+      return;
+    }
+    if (!approver) {
+      toast.error("Approver is required");
+      return;
+    }
+
     try {
       const formData = {
         formName: trimmedFormName,
@@ -503,6 +551,9 @@ const FormBuilder = ({ formId, onSave }) => {
           created: new Date().toISOString(),
           version: "1.0",
         },
+        initiator: initiator,
+        reviewer: reviewer,
+        approver: approver,
       };
 
       if (formId) {
@@ -629,6 +680,21 @@ const FormBuilder = ({ formId, onSave }) => {
                 }}
               >
                 <EditNoteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Manage Roles">
+              <IconButton
+                size="small"
+                onClick={() => setShowRoleDialog(true)}
+                sx={{
+                  ml: 0.5,
+                  color: "text.secondary",
+                  "&:hover": {
+                    color: "primary.main",
+                  },
+                }}
+              >
+                <PeopleIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>
@@ -909,6 +975,279 @@ const FormBuilder = ({ formId, onSave }) => {
             <Button onClick={handleFormNameCancel}>Cancel</Button>
             <Button onClick={handleFormNameSubmit} variant="contained">
               OK
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Role Management Dialog */}
+        <Dialog
+          open={showRoleDialog}
+          onClose={() => setShowRoleDialog(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Manage Form Roles</DialogTitle>
+          <DialogContent>
+            <Box
+              sx={{ display: "flex", flexDirection: "column", gap: 3, pt: 2 }}
+            >
+              {/* Initiator Select */}
+              <FormControl size="small" fullWidth>
+                <InputLabel>Initiator</InputLabel>
+                <Select
+                  value={initiator || ""}
+                  onChange={(e) => setInitiator(e.target.value || null)}
+                  label="Initiator"
+                  renderValue={(selected) => {
+                    if (!selected) {
+                      return (
+                        <Typography
+                          color="textSecondary"
+                          sx={{ fontSize: "0.875rem" }}
+                        >
+                          Select an initiator...
+                        </Typography>
+                      );
+                    }
+                    const user = users.find((u) => u._id === selected);
+                    if (!user) return selected;
+                    return (
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Avatar
+                          sx={{ width: 24, height: 24, bgcolor: "#457860" }}
+                        >
+                          <PersonIcon sx={{ fontSize: 14 }} />
+                        </Avatar>
+                        <Typography variant="body2">
+                          {user.firstName} {user.lastName}
+                        </Typography>
+                      </Box>
+                    );
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {usersLoading ? (
+                    <MenuItem disabled>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <CircularProgress size={20} />
+                        <Typography>Loading users...</Typography>
+                      </Box>
+                    </MenuItem>
+                  ) : (
+                    users.map((user) => (
+                      <MenuItem key={user._id} value={user._id}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                          }}
+                        >
+                          <Avatar
+                            sx={{ width: 32, height: 32, bgcolor: "#457860" }}
+                          >
+                            <PersonIcon sx={{ fontSize: 18 }} />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {user.firstName} {user.lastName}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {user.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+
+              {/* Reviewer Select */}
+              <FormControl size="small" fullWidth>
+                <InputLabel>Reviewer</InputLabel>
+                <Select
+                  value={reviewer || ""}
+                  onChange={(e) => setReviewer(e.target.value || null)}
+                  label="Reviewer"
+                  renderValue={(selected) => {
+                    if (!selected) {
+                      return (
+                        <Typography
+                          color="textSecondary"
+                          sx={{ fontSize: "0.875rem" }}
+                        >
+                          Select a reviewer...
+                        </Typography>
+                      );
+                    }
+                    const user = users.find((u) => u._id === selected);
+                    if (!user) return selected;
+                    return (
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Avatar
+                          sx={{ width: 24, height: 24, bgcolor: "#457860" }}
+                        >
+                          <PersonIcon sx={{ fontSize: 14 }} />
+                        </Avatar>
+                        <Typography variant="body2">
+                          {user.firstName} {user.lastName}
+                        </Typography>
+                      </Box>
+                    );
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {usersLoading ? (
+                    <MenuItem disabled>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <CircularProgress size={20} />
+                        <Typography>Loading users...</Typography>
+                      </Box>
+                    </MenuItem>
+                  ) : (
+                    users.map((user) => (
+                      <MenuItem key={user._id} value={user._id}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                          }}
+                        >
+                          <Avatar
+                            sx={{ width: 32, height: 32, bgcolor: "#457860" }}
+                          >
+                            <PersonIcon sx={{ fontSize: 18 }} />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {user.firstName} {user.lastName}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {user.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+
+              {/* Approver Select */}
+              <FormControl size="small" fullWidth>
+                <InputLabel>Approver</InputLabel>
+                <Select
+                  value={approver || ""}
+                  onChange={(e) => setApprover(e.target.value || null)}
+                  label="Approver"
+                  renderValue={(selected) => {
+                    if (!selected) {
+                      return (
+                        <Typography
+                          color="textSecondary"
+                          sx={{ fontSize: "0.875rem" }}
+                        >
+                          Select an approver...
+                        </Typography>
+                      );
+                    }
+                    const user = users.find((u) => u._id === selected);
+                    if (!user) return selected;
+                    return (
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Avatar
+                          sx={{ width: 24, height: 24, bgcolor: "#457860" }}
+                        >
+                          <PersonIcon sx={{ fontSize: 14 }} />
+                        </Avatar>
+                        <Typography variant="body2">
+                          {user.firstName} {user.lastName}
+                        </Typography>
+                      </Box>
+                    );
+                  }}
+                >
+                  <MenuItem value="">
+                    <em>None</em>
+                  </MenuItem>
+                  {usersLoading ? (
+                    <MenuItem disabled>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <CircularProgress size={20} />
+                        <Typography>Loading users...</Typography>
+                      </Box>
+                    </MenuItem>
+                  ) : (
+                    users.map((user) => (
+                      <MenuItem key={user._id} value={user._id}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                          }}
+                        >
+                          <Avatar
+                            sx={{ width: 32, height: 32, bgcolor: "#457860" }}
+                          >
+                            <PersonIcon sx={{ fontSize: 18 }} />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {user.firstName} {user.lastName}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {user.email}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowRoleDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => setShowRoleDialog(false)}
+              variant="contained"
+              sx={{
+                backgroundColor: "#457860",
+                "&:hover": {
+                  backgroundColor: "#2d5a3d",
+                },
+              }}
+            >
+              Save Roles
             </Button>
           </DialogActions>
         </Dialog>

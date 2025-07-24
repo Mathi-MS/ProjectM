@@ -35,7 +35,7 @@ const SelectInput = ({ field, control, errors, disabled = false }) => {
               size="medium"
               displayEmpty
               renderValue={(selected) => {
-                if (!selected) {
+                if (!selected || selected === "") {
                   return (
                     <em style={{ color: "#999" }}>
                       {field.placeholder || "Select an option"}

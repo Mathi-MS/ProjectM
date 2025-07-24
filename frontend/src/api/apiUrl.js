@@ -10,6 +10,7 @@ export const apiUrls = {
   createUser: "users",
   updateUser: (id) => `users/${id}`,
   deleteUser: (id) => `users/${id}`,
+  usersAutocomplete: "users/autocomplete",
 
   // Form management endpoints
   forms: "forms",

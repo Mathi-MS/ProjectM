@@ -16,10 +16,16 @@ export const useForms = (options = {}) => {
       if (options.sortOrder) params.append("sortOrder", options.sortOrder);
 
       const response = await api.get(`/forms?${params.toString()}`);
+      console.log("useForms API URL:", `/forms?${params.toString()}`);
+      console.log("useForms API response:", response.data);
+      console.log(
+        "Forms returned from API:",
+        response.data?.forms?.length || 0
+      );
       return response.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
@@ -34,7 +40,7 @@ export const useForm = (id) => {
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 };
 

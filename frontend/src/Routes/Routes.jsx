@@ -8,6 +8,8 @@ import FormBuilder from "../pages/FormBuilder";
 import FormBuilderDemo from "../pages/FormBuilderDemo";
 import Forms from "../pages/Forms";
 import FormPreview from "../pages/FormPreview";
+import TestFormRoles from "../pages/TestFormRoles";
+import ValidationTest from "../components/FormBuilder/ValidationTest";
 import Layout from "../components/Layout";
 import ProtectedRoute from "../components/ProtectedRoute";
 import DemoProtectedRoute from "../components/DemoProtectedRoute";
@@ -66,6 +68,14 @@ const routes = createHashRouter([
       {
         path: "forms/:formId/preview",
         element: <FormPreview />,
+      },
+      {
+        path: "test-roles",
+        element: <TestFormRoles />,
+      },
+      {
+        path: "validation-test",
+        element: <ValidationTest />,
       },
     ],
   },

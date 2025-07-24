@@ -34,6 +34,7 @@ import {
   useUpdateFormStatus,
 } from "../hooks/useForms";
 import { formatDistanceToNow } from "date-fns";
+import FormStatusToggle from "../components/FormStatusToggle";
 
 const Forms = () => {
   const navigate = useNavigate();
@@ -209,11 +210,12 @@ const Forms = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={form.status || "draft"}
-                      color={getStatusColor(form.status)}
-                      size="small"
-                      sx={{ textTransform: "capitalize" }}
+                    <FormStatusToggle
+                      form={form}
+                      onStatusChange={(updatedForm) => {
+                        // Optionally handle the status change
+                        console.log("Form status updated:", updatedForm);
+                      }}
                     />
                   </TableCell>
                   <TableCell>

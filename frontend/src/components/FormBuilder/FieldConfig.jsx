@@ -33,6 +33,8 @@ import {
 } from "@mui/icons-material";
 import toast from "react-hot-toast";
 import { FIELD_TYPES, GRID_SIZES } from "./constants";
+import { validateField } from "./utils";
+import { useFormValidation } from "../../hooks/useFormValidation";
 
 const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
   const [config, setConfig] = useState(field);
@@ -104,129 +106,50 @@ const FieldConfig = ({ field, onUpdate, onClose, allFields, isMobile }) => {
   };
 
   const validateConfig = () => {
-    const newErrors = {};
-    const summary = [];
-
-    // Validate required fields
-    if (!config.name || config.name.trim() === "") {
-      newErrors.name = "Field name is required";
-      summary.push("Field name is required");
-    }
-
-    // Validate field name format (only lowercase letters and underscores)
-    if (config.name && !/^[a-z_]+$/.test(config.name)) {
-      newErrors.name =
-        "Field name must contain only lowercase letters and underscores";
-      summary.push(
-        "Field name must contain only lowercase letters and underscores"
-      );
-    }
-
-    // Check for duplicate field names
+    // Use the comprehensive validation function
+    const validation = validateField(config);
+    
+    // Check for duplicate field names in the context of all fields
     if (
       config.name &&
-      !newErrors.name && // Only check uniqueness if format is valid
       allFields.some((f) => f.id !== config.id && f.name === config.name)
     ) {
-      newErrors.name = "Field name must be unique";
-      summary.push("Field name must be unique");
+      validation.errors.push("Field name must be unique");
+      validation.isValid = false;
     }
 
-    // Validate placeholder is required for applicable field types
-    if (
-      (config.type === FIELD_TYPES.TEXT ||
-        config.type === FIELD_TYPES.EMAIL ||
-        config.type === FIELD_TYPES.NUMBER ||
-        config.type === FIELD_TYPES.PASSWORD ||
-        config.type === FIELD_TYPES.URL ||
-        config.type === FIELD_TYPES.TEL ||
-        config.type === FIELD_TYPES.TEXTAREA ||
-        config.type === FIELD_TYPES.DATE ||
-        config.type === FIELD_TYPES.TIME ||
-        config.type === FIELD_TYPES.WEEK ||
-        config.type === FIELD_TYPES.COLOR ||
-        config.type === FIELD_TYPES.SELECT ||
-        config.type === FIELD_TYPES.MULTISELECT) &&
-      (!config.placeholder || config.placeholder.trim() === "")
-    ) {
-      newErrors.placeholder = "Placeholder is required for this field type";
-      summary.push("Placeholder is required for this field type");
-    }
+    // Convert validation result to the format expected by the component
+    const newErrors = {};
+    const summary = [...validation.errors, ...validation.warnings];
 
-    // Validate label for visible fields
-    if (
-      config.type !== FIELD_TYPES.HIDDEN &&
-      config.type !== FIELD_TYPES.DIVIDER &&
-      config.type !== FIELD_TYPES.SPACER &&
-      (!config.label || config.label.trim() === "")
-    ) {
-      newErrors.label = "Label is required for this field type";
-      summary.push("Label is required for this field type");
-    }
-
-    // Validate options for select fields
-    if (
-      (config.type === FIELD_TYPES.SELECT ||
-        config.type === FIELD_TYPES.MULTISELECT ||
-        config.type === FIELD_TYPES.RADIO) &&
-      (!config.options || config.options.length === 0)
-    ) {
-      newErrors.options = "At least one option is required";
-      summary.push("At least one option is required");
-    }
-
-    // Validate option values
-    if (config.options && config.options.length > 0) {
-      const hasEmptyOption = config.options.some(
-        (opt) => !opt.label || !opt.value
-      );
-      if (hasEmptyOption) {
-        newErrors.options = "All options must have both label and value";
-        summary.push("All options must have both label and value");
+    // Map errors to specific fields for UI display
+    validation.errors.forEach(error => {
+      if (error.includes('Field name') || error.includes('name')) {
+        newErrors.name = error;
+      } else if (error.includes('Label') || error.includes('label')) {
+        newErrors.label = error;
+      } else if (error.includes('Placeholder') || error.includes('placeholder')) {
+        newErrors.placeholder = error;
+      } else if (error.includes('Text content') || error.includes('text')) {
+        newErrors.text = error;
+      } else if (error.includes('Options') || error.includes('option')) {
+        newErrors.options = error;
+      } else if (error.includes('validation') || error.includes('length') || error.includes('value') || error.includes('min') || error.includes('max')) {
+        newErrors.validation = error;
+      } else {
+        // General validation error
+        newErrors.general = error;
       }
-    }
-
-    // Validate text content for header/paragraph
-    if (
-      (config.type === FIELD_TYPES.HEADER ||
-        config.type === FIELD_TYPES.PARAGRAPH) &&
-      (!config.text || config.text.trim() === "")
-    ) {
-      newErrors.text = "Text content is required";
-      summary.push("Text content is required");
-    }
-
-    // Validate validation rules
-    if (config.validations) {
-      if (
-        config.validations.minLength &&
-        config.validations.maxLength &&
-        config.validations.minLength > config.validations.maxLength
-      ) {
-        newErrors.validation =
-          "Minimum length cannot be greater than maximum length";
-        summary.push("Minimum length cannot be greater than maximum length");
-      }
-
-      if (
-        config.validations.min &&
-        config.validations.max &&
-        config.validations.min > config.validations.max
-      ) {
-        newErrors.validation =
-          "Minimum value cannot be greater than maximum value";
-        summary.push("Minimum value cannot be greater than maximum value");
-      }
-    }
+    });
 
     setErrors(newErrors);
     setValidationSummary(summary);
 
-    if (Object.keys(newErrors).length > 0) {
+    if (Object.keys(newErrors).length > 0 || validation.warnings.length > 0) {
       setShowValidationAlert(true);
     }
 
-    return Object.keys(newErrors).length === 0;
+    return validation.isValid && !newErrors.name; // Include duplicate name check
   };
 
   const getCriticalErrors = () => {

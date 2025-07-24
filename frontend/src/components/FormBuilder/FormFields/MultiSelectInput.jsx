@@ -67,6 +67,9 @@ const MultiSelectInput = ({ field, control, errors, disabled = false }) => {
                           key={value}
                           label={option?.label || value}
                           size="small"
+                          sx={{
+                            transition: "none", // Prevent transition animations that might cause blinking
+                          }}
                         />
                       );
                     })}

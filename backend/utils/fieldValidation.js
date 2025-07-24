@@ -1,53 +1,50 @@
-import { v4 as uuidv4 } from "uuid";
-import { FIELD_TYPES, DEFAULT_FIELD_CONFIG } from "./constants";
+const { body } = require("express-validator");
 
-// Generate unique field ID
-export const generateFieldId = () => `field_${uuidv4()}`;
-
-// Create new field with default configuration
-export const createField = (type, overrides = {}) => {
-  const defaultConfig = DEFAULT_FIELD_CONFIG[type] || {};
-  return {
-    id: generateFieldId(),
-    name: `field_${Date.now()}`,
-    ...defaultConfig,
-    ...overrides,
-  };
-};
+// Define all valid field types
+const VALID_FIELD_TYPES = [
+  "text", "email", "number", "date", "time", "week", "color", "password", "url", "tel",
+  "textarea", "select", "multiselect", "checkbox", "radio", "switch", "file", "rating",
+  "header", "paragraph", "divider", "spacer", "hidden", "step"
+];
 
 // Define field types that require labels
 const FIELD_TYPES_REQUIRING_LABEL = [
-  FIELD_TYPES.TEXT, FIELD_TYPES.EMAIL, FIELD_TYPES.NUMBER, FIELD_TYPES.DATE, 
-  FIELD_TYPES.TIME, FIELD_TYPES.WEEK, FIELD_TYPES.COLOR, FIELD_TYPES.PASSWORD, 
-  FIELD_TYPES.URL, FIELD_TYPES.TEL, FIELD_TYPES.TEXTAREA, FIELD_TYPES.SELECT, 
-  FIELD_TYPES.MULTISELECT, FIELD_TYPES.CHECKBOX, FIELD_TYPES.RADIO, 
-  FIELD_TYPES.SWITCH, FIELD_TYPES.FILE, FIELD_TYPES.RATING
+  "text", "email", "number", "date", "time", "week", "color", "password", "url", "tel",
+  "textarea", "select", "multiselect", "checkbox", "radio", "switch", "file", "rating"
 ];
 
 // Define field types that require options
-const FIELD_TYPES_REQUIRING_OPTIONS = [FIELD_TYPES.SELECT, FIELD_TYPES.MULTISELECT, FIELD_TYPES.RADIO];
+const FIELD_TYPES_REQUIRING_OPTIONS = ["select", "multiselect", "radio"];
 
 // Define field types that require placeholder
 const FIELD_TYPES_REQUIRING_PLACEHOLDER = [
-  FIELD_TYPES.TEXT, FIELD_TYPES.EMAIL, FIELD_TYPES.NUMBER, FIELD_TYPES.PASSWORD, 
-  FIELD_TYPES.URL, FIELD_TYPES.TEL, FIELD_TYPES.TEXTAREA, FIELD_TYPES.SELECT, 
-  FIELD_TYPES.MULTISELECT
+  "text", "email", "number", "password", "url", "tel", "textarea", "select", "multiselect"
 ];
 
-// Define field types that require text content
-const FIELD_TYPES_REQUIRING_TEXT = [FIELD_TYPES.HEADER, FIELD_TYPES.PARAGRAPH];
+// Define field types that are layout elements (don't need validation rules)
+const LAYOUT_FIELD_TYPES = ["header", "paragraph", "divider", "spacer", "step"];
 
-// Define layout field types
-const LAYOUT_FIELD_TYPES = [FIELD_TYPES.HEADER, FIELD_TYPES.PARAGRAPH, FIELD_TYPES.DIVIDER, FIELD_TYPES.SPACER, FIELD_TYPES.STEP];
+// Define field types that require text content
+const FIELD_TYPES_REQUIRING_TEXT = ["header", "paragraph"];
+
+// Define valid validation types
+const VALID_VALIDATION_TYPES = [
+  "required", "minLength", "maxLength", "min", "max", "pattern", "email", "url", "fileSize", "fileType"
+];
 
 // Define valid grid sizes
 const VALID_GRID_SIZES = [1, 2, 3, 4, 6, 12];
 
-// Validate field configuration
-export const validateField = (field) => {
+/**
+ * Validate a single field configuration
+ * @param {Object} field - Field configuration object
+ * @returns {Object} - Validation result with isValid and errors
+ */
+const validateField = (field) => {
   const errors = [];
   const warnings = [];
 
+  // 1. Check if field has required basic properties
   if (!field) {
     return {
       isValid: false,
@@ -56,26 +53,26 @@ export const validateField = (field) => {
     };
   }
 
-  // 1. Validate field ID
+  // 2. Validate field ID
   if (!field.id || typeof field.id !== "string" || field.id.trim() === "") {
     errors.push("Field ID is required and must be a non-empty string");
   }
 
-  // 2. Validate field type
+  // 3. Validate field type
   if (!field.type || typeof field.type !== "string") {
     errors.push("Field type is required and must be a string");
-  } else if (!Object.values(FIELD_TYPES).includes(field.type)) {
-    errors.push(`Invalid field type: ${field.type}`);
+  } else if (!VALID_FIELD_TYPES.includes(field.type)) {
+    errors.push(`Invalid field type: ${field.type}. Valid types are: ${VALID_FIELD_TYPES.join(", ")}`);
   }
 
-  // 3. Validate field name
+  // 4. Validate field name
   if (!field.name || typeof field.name !== "string" || field.name.trim() === "") {
     errors.push("Field name is required and must be a non-empty string");
   } else if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(field.name)) {
     errors.push("Field name must start with a letter and contain only letters, numbers, and underscores");
   }
 
-  // 4. Validate label for fields that require it
+  // 5. Validate label for fields that require it
   if (FIELD_TYPES_REQUIRING_LABEL.includes(field.type)) {
     if (!field.label || typeof field.label !== "string" || field.label.trim() === "") {
       errors.push(`Label is required for ${field.type} fields`);
@@ -84,7 +81,7 @@ export const validateField = (field) => {
     }
   }
 
-  // 5. Validate text content for layout elements
+  // 6. Validate text content for layout elements
   if (FIELD_TYPES_REQUIRING_TEXT.includes(field.type)) {
     if (!field.text || typeof field.text !== "string" || field.text.trim() === "") {
       errors.push(`Text content is required for ${field.type} fields`);
@@ -93,7 +90,7 @@ export const validateField = (field) => {
     }
   }
 
-  // 6. Validate placeholder for applicable fields
+  // 7. Validate placeholder for applicable fields
   if (FIELD_TYPES_REQUIRING_PLACEHOLDER.includes(field.type)) {
     if (field.placeholder && typeof field.placeholder !== "string") {
       errors.push("Placeholder must be a string");
@@ -102,26 +99,26 @@ export const validateField = (field) => {
     }
   }
 
-  // 7. Validate helper text
+  // 8. Validate helper text
   if (field.helperText && typeof field.helperText !== "string") {
     errors.push("Helper text must be a string");
   } else if (field.helperText && field.helperText.length > 500) {
     errors.push("Helper text cannot exceed 500 characters");
   }
 
-  // 8. Validate required property
+  // 9. Validate required property
   if (field.required !== undefined && typeof field.required !== "boolean") {
     errors.push("Required property must be a boolean");
   }
 
-  // 9. Validate grid size
+  // 10. Validate grid size
   if (field.gridSize !== undefined) {
     if (!Number.isInteger(field.gridSize) || !VALID_GRID_SIZES.includes(field.gridSize)) {
       errors.push(`Grid size must be one of: ${VALID_GRID_SIZES.join(", ")}`);
     }
   }
 
-  // 10. Validate options for fields that require them
+  // 11. Validate options for fields that require them
   if (FIELD_TYPES_REQUIRING_OPTIONS.includes(field.type)) {
     if (!field.options || !Array.isArray(field.options)) {
       errors.push(`Options array is required for ${field.type} fields`);
@@ -151,9 +148,9 @@ export const validateField = (field) => {
     }
   }
 
-  // 11. Validate specific field type properties
+  // 12. Validate specific field type properties
   switch (field.type) {
-    case FIELD_TYPES.TEXTAREA:
+    case "textarea":
       if (field.rows !== undefined) {
         if (!Number.isInteger(field.rows) || field.rows < 1 || field.rows > 20) {
           errors.push("Textarea rows must be an integer between 1 and 20");
@@ -161,13 +158,13 @@ export const validateField = (field) => {
       }
       break;
 
-    case FIELD_TYPES.FILE:
+    case "file":
       if (field.multiple !== undefined && typeof field.multiple !== "boolean") {
         errors.push("File multiple property must be a boolean");
       }
       break;
 
-    case FIELD_TYPES.RATING:
+    case "rating":
       if (field.max !== undefined) {
         if (!Number.isInteger(field.max) || field.max < 1 || field.max > 10) {
           errors.push("Rating max value must be an integer between 1 and 10");
@@ -175,7 +172,7 @@ export const validateField = (field) => {
       }
       break;
 
-    case FIELD_TYPES.HEADER:
+    case "header":
       if (field.variant && !["h1", "h2", "h3", "h4", "h5", "h6"].includes(field.variant)) {
         errors.push("Header variant must be one of: h1, h2, h3, h4, h5, h6");
       }
@@ -184,13 +181,13 @@ export const validateField = (field) => {
       }
       break;
 
-    case FIELD_TYPES.PARAGRAPH:
+    case "paragraph":
       if (field.align && !["left", "center", "right", "justify"].includes(field.align)) {
         errors.push("Paragraph align must be one of: left, center, right, justify");
       }
       break;
 
-    case FIELD_TYPES.SPACER:
+    case "spacer":
       if (field.height !== undefined) {
         if (!Number.isInteger(field.height) || field.height < 1 || field.height > 200) {
           errors.push("Spacer height must be an integer between 1 and 200 pixels");
@@ -198,13 +195,13 @@ export const validateField = (field) => {
       }
       break;
 
-    case FIELD_TYPES.HIDDEN:
+    case "hidden":
       if (!field.value && field.value !== 0 && field.value !== false) {
         warnings.push("Hidden field should have a default value");
       }
       break;
 
-    case FIELD_TYPES.STEP:
+    case "step":
       if (field.title && field.title.length > 100) {
         errors.push("Step title cannot exceed 100 characters");
       }
@@ -214,12 +211,10 @@ export const validateField = (field) => {
       break;
   }
 
-  // 12. Validate validations object
+  // 13. Validate validations object
   if (field.validations && typeof field.validations === "object") {
-    const validValidationTypes = ["required", "minLength", "maxLength", "min", "max", "pattern", "email", "url", "fileSize", "fileType"];
-    
     Object.keys(field.validations).forEach(validationType => {
-      if (!validValidationTypes.includes(validationType)) {
+      if (!VALID_VALIDATION_TYPES.includes(validationType)) {
         errors.push(`Invalid validation type: ${validationType}`);
       } else {
         const validationValue = field.validations[validationType];
@@ -294,6 +289,19 @@ export const validateField = (field) => {
     }
   }
 
+  // 14. Validate dependencies
+  if (field.dependsOn && typeof field.dependsOn === "object") {
+    if (!field.dependsOn.field || typeof field.dependsOn.field !== "string") {
+      errors.push("Dependency field name is required and must be a string");
+    }
+    if (field.dependsOn.value === undefined) {
+      errors.push("Dependency value is required");
+    }
+    if (field.dependsOn.condition && !["equals", "not_equals", "contains", "not_empty", "empty"].includes(field.dependsOn.condition)) {
+      errors.push("Dependency condition must be one of: equals, not_equals, contains, not_empty, empty");
+    }
+  }
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -301,8 +309,12 @@ export const validateField = (field) => {
   };
 };
 
-// Validate an array of fields
-export const validateFields = (fields) => {
+/**
+ * Validate an array of fields
+ * @param {Array} fields - Array of field configurations
+ * @returns {Object} - Validation result with isValid, errors, and warnings
+ */
+const validateFields = (fields) => {
   const errors = [];
   const warnings = [];
   const fieldNames = new Set();
@@ -374,203 +386,52 @@ export const validateFields = (fields) => {
   };
 };
 
-// Generate validation schema for react-hook-form
-export const generateValidationSchema = (fields) => {
-  const schema = {};
-
-  fields.forEach((field) => {
-    if (
-      field.type === FIELD_TYPES.HEADER ||
-      field.type === FIELD_TYPES.PARAGRAPH
-    ) {
-      return; // Skip layout elements
-    }
-
-    const validations = field.validations || {};
-    const rules = {};
-
-    if (field.required) {
-      rules.required = `${field.label} is required`;
-    }
-
-    if (validations.minLength) {
-      rules.minLength = {
-        value: validations.minLength,
-        message: `Minimum length is ${validations.minLength}`,
-      };
-    }
-
-    if (validations.maxLength) {
-      rules.maxLength = {
-        value: validations.maxLength,
-        message: `Maximum length is ${validations.maxLength}`,
-      };
-    }
-
-    if (validations.min) {
-      rules.min = {
-        value: validations.min,
-        message: `Minimum value is ${validations.min}`,
-      };
-    }
-
-    if (validations.max) {
-      rules.max = {
-        value: validations.max,
-        message: `Maximum value is ${validations.max}`,
-      };
-    }
-
-    if (validations.pattern) {
-      rules.pattern = {
-        value: new RegExp(validations.pattern),
-        message: validations.patternMessage || "Invalid format",
-      };
-    }
-
-    if (validations.email) {
-      rules.pattern = {
-        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-        message: "Invalid email address",
-      };
-    }
-
-    if (validations.url) {
-      rules.pattern = {
-        value: /^https?:\/\/.+/,
-        message: "Invalid URL",
-      };
-    }
-
-    schema[field.name] = rules;
-  });
-
-  return schema;
+/**
+ * Express validator middleware for form fields
+ */
+const validateFormFields = () => {
+  return [
+    body("fields")
+      .isArray()
+      .withMessage("Fields must be an array")
+      .custom((fields) => {
+        const validation = validateFields(fields);
+        if (!validation.isValid) {
+          throw new Error(validation.errors.join("; "));
+        }
+        return true;
+      })
+  ];
 };
 
-// Check if field depends on another field
-export const checkFieldDependency = (field, formData) => {
-  if (!field.dependsOn) return true;
-
-  const {
-    field: dependentField,
-    value: expectedValue,
-    condition = "equals",
-  } = field.dependsOn;
-  const actualValue = formData[dependentField];
-
-  switch (condition) {
-    case "equals":
-      return actualValue === expectedValue;
-    case "not_equals":
-      return actualValue !== expectedValue;
-    case "contains":
-      return Array.isArray(actualValue)
-        ? actualValue.includes(expectedValue)
-        : false;
-    case "not_empty":
-      return actualValue && actualValue.length > 0;
-    case "empty":
-      return !actualValue || actualValue.length === 0;
-    default:
-      return true;
-  }
+/**
+ * Express validator middleware for individual field
+ */
+const validateSingleField = () => {
+  return [
+    body("field")
+      .isObject()
+      .withMessage("Field must be an object")
+      .custom((field) => {
+        const validation = validateField(field);
+        if (!validation.isValid) {
+          throw new Error(validation.errors.join("; "));
+        }
+        return true;
+      })
+  ];
 };
 
-// Format file size
-export const formatFileSize = (bytes) => {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-};
-
-// Validate file
-export const validateFile = (file, validations) => {
-  const errors = [];
-
-  if (validations.fileType && validations.fileType.length > 0) {
-    if (!validations.fileType.includes(file.type)) {
-      errors.push(
-        `File type must be one of: ${validations.fileType.join(", ")}`
-      );
-    }
-  }
-
-  if (validations.fileSize) {
-    const maxSizeBytes = validations.fileSize * 1024 * 1024; // Convert MB to bytes
-    if (file.size > maxSizeBytes) {
-      errors.push(`File size must be less than ${validations.fileSize}MB`);
-    }
-  }
-
-  return errors;
-};
-
-// Deep clone object
-export const deepClone = (obj) => {
-  return JSON.parse(JSON.stringify(obj));
-};
-
-// Generate form steps
-export const generateFormSteps = (fields) => {
-  const steps = [];
-  let currentStep = { title: "Step 1", fields: [] };
-
-  fields.forEach((field) => {
-    if (field.type === FIELD_TYPES.STEP) {
-      if (currentStep.fields.length > 0) {
-        steps.push(currentStep);
-      }
-      currentStep = {
-        title: field.title || `Step ${steps.length + 2}`,
-        fields: [],
-      };
-    } else {
-      currentStep.fields.push(field);
-    }
-  });
-
-  if (currentStep.fields.length > 0) {
-    steps.push(currentStep);
-  }
-
-  return steps.length > 0 ? steps : [{ title: "Form", fields }];
-};
-
-// Serialize form data for display, converting File objects to readable format
-export const serializeFormData = (data) => {
-  const serialized = {};
-
-  for (const [key, value] of Object.entries(data)) {
-    if (value instanceof File) {
-      // Single file
-      serialized[key] = {
-        name: value.name,
-        size: value.size,
-        type: value.type,
-        lastModified: new Date(value.lastModified).toISOString(),
-        sizeFormatted: formatFileSize(value.size),
-      };
-    } else if (
-      Array.isArray(value) &&
-      value.length > 0 &&
-      value[0] instanceof File
-    ) {
-      // Array of files
-      serialized[key] = value.map((file) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: new Date(file.lastModified).toISOString(),
-        sizeFormatted: formatFileSize(file.size),
-      }));
-    } else {
-      // Regular value
-      serialized[key] = value;
-    }
-  }
-
-  return serialized;
+module.exports = {
+  validateField,
+  validateFields,
+  validateFormFields,
+  validateSingleField,
+  VALID_FIELD_TYPES,
+  FIELD_TYPES_REQUIRING_LABEL,
+  FIELD_TYPES_REQUIRING_OPTIONS,
+  FIELD_TYPES_REQUIRING_PLACEHOLDER,
+  LAYOUT_FIELD_TYPES,
+  VALID_VALIDATION_TYPES,
+  VALID_GRID_SIZES
 };
