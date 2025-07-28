@@ -2201,11 +2201,6 @@ app.get("/api/templates", authenticateToken, async (req, res) => {
       .populate([
         { path: "createdBy", select: "firstName lastName email" },
         { path: "approverTemplate", select: "firstName lastName email" },
-        {
-          path: "forms",
-          select: "formName status",
-          match: { isActive: true, status: "active" },
-        },
       ])
       .sort({ [sortBy]: sortDirection })
       .skip(skip)
@@ -2275,11 +2270,6 @@ app.get("/api/templates/:id", authenticateToken, async (req, res) => {
     const template = await Template.findById(id).populate([
       { path: "createdBy", select: "firstName lastName email" },
       { path: "approverTemplate", select: "firstName lastName email" },
-      {
-        path: "forms",
-        select: "formName status",
-        match: { isActive: true },
-      },
     ]);
 
     if (!template || !template.isActive) {
@@ -2421,10 +2411,26 @@ app.post(
         });
       }
 
+      // Convert form IDs to embedded form documents
+      const embeddedForms = existingForms.map((form) => ({
+        formId: form._id,
+        formName: form.formName,
+        publicId: form.publicId,
+        fields: form.fields,
+        metadata: form.metadata,
+        createdBy: form.createdBy,
+        initiator: form.initiator,
+        reviewer: form.reviewer,
+        approver: form.approver,
+        status: form.status,
+        isActive: form.isActive,
+        addedToTemplate: new Date(),
+      }));
+
       // Create template
       const template = new Template({
         templateName,
-        forms,
+        forms: embeddedForms,
         approverTemplate,
         createdBy: req.user.id,
         status: finalStatus,
@@ -2436,11 +2442,6 @@ app.post(
       await template.populate([
         { path: "createdBy", select: "firstName lastName email" },
         { path: "approverTemplate", select: "firstName lastName email" },
-        {
-          path: "forms",
-          select: "formName status",
-          match: { isActive: true },
-        },
       ]);
 
       res.status(201).json({
@@ -2616,9 +2617,25 @@ app.put(
         });
       }
 
+      // Convert form IDs to embedded form documents
+      const embeddedForms = existingForms.map((form) => ({
+        formId: form._id,
+        formName: form.formName,
+        publicId: form.publicId,
+        fields: form.fields,
+        metadata: form.metadata,
+        createdBy: form.createdBy,
+        initiator: form.initiator,
+        reviewer: form.reviewer,
+        approver: form.approver,
+        status: form.status,
+        isActive: form.isActive,
+        addedToTemplate: new Date(),
+      }));
+
       // Update template
       template.templateName = templateName;
-      template.forms = forms;
+      template.forms = embeddedForms;
       template.approverTemplate = approverTemplate;
       template.status = finalStatus;
 
@@ -2628,11 +2645,6 @@ app.put(
       await template.populate([
         { path: "createdBy", select: "firstName lastName email" },
         { path: "approverTemplate", select: "firstName lastName email" },
-        {
-          path: "forms",
-          select: "formName status",
-          match: { isActive: true },
-        },
       ]);
 
       res.json({
@@ -2753,11 +2765,6 @@ app.get("/api/templates/:id/validate", authenticateToken, async (req, res) => {
     const template = await Template.findById(id).populate([
       { path: "createdBy", select: "firstName lastName email" },
       { path: "approverTemplate", select: "firstName lastName email" },
-      {
-        path: "forms",
-        select: "formName status isActive",
-        match: { isActive: true },
-      },
     ]);
 
     if (!template || !template.isActive) {

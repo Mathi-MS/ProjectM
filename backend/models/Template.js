@@ -11,8 +11,68 @@ const TemplateSchema = new mongoose.Schema(
     },
     forms: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Form",
+        formId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Form",
+          required: true,
+        },
+        formName: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        publicId: {
+          type: String,
+          required: true,
+        },
+        fields: {
+          type: Array,
+          required: true,
+          default: [],
+        },
+        metadata: {
+          created: {
+            type: Date,
+            default: Date.now,
+          },
+          version: {
+            type: String,
+            default: "1.0",
+          },
+          lastModified: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+        createdBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        initiator: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        reviewer: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        approver: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        status: {
+          type: String,
+          enum: ["active", "inactive"],
+          default: "inactive",
+        },
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
+        addedToTemplate: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
     approverTemplate: {
@@ -62,7 +122,7 @@ TemplateSchema.statics.findByApprover = function (userId) {
 
 // Static method to find templates with specific forms
 TemplateSchema.statics.findWithForm = function (formId) {
-  return this.find({ forms: formId, isActive: true });
+  return this.find({ "forms.formId": formId, isActive: true });
 };
 
 // Static method to check if template name exists (case-insensitive)
@@ -109,12 +169,9 @@ TemplateSchema.methods.canBeActivated = async function () {
     });
   } else {
     // Check if template has at least one active form
-    const Form = this.constructor.model("Form");
-    const activeForms = await Form.find({
-      _id: { $in: this.forms },
-      status: "active",
-      isActive: true,
-    });
+    const activeForms = this.forms.filter(
+      (form) => form.status === "active" && form.isActive === true
+    );
 
     if (activeForms.length === 0) {
       validation.isValid = false;
@@ -161,12 +218,71 @@ TemplateSchema.methods.activate = async function () {
   return this.save();
 };
 
+// Instance method to add a form to the template
+TemplateSchema.methods.addForm = async function (formData) {
+  // Check if form already exists in template
+  const existingFormIndex = this.forms.findIndex(
+    (form) => form.formId.toString() === formData._id.toString()
+  );
+
+  const embeddedForm = {
+    formId: formData._id,
+    formName: formData.formName,
+    publicId: formData.publicId,
+    fields: formData.fields,
+    metadata: formData.metadata,
+    createdBy: formData.createdBy,
+    initiator: formData.initiator,
+    reviewer: formData.reviewer,
+    approver: formData.approver,
+    status: formData.status,
+    isActive: formData.isActive,
+    addedToTemplate: new Date(),
+  };
+
+  if (existingFormIndex >= 0) {
+    // Update existing form
+    this.forms[existingFormIndex] = embeddedForm;
+  } else {
+    // Add new form
+    this.forms.push(embeddedForm);
+  }
+
+  return this.save();
+};
+
+// Instance method to remove a form from the template
+TemplateSchema.methods.removeForm = async function (formId) {
+  // Reload the document to get the latest version
+  const latestTemplate = await this.constructor.findById(this._id);
+  latestTemplate.forms = latestTemplate.forms.filter(
+    (form) => form.formId.toString() !== formId.toString()
+  );
+  return latestTemplate.save();
+};
+
+// Instance method to get a specific form from the template
+TemplateSchema.methods.getForm = function (formId) {
+  return this.forms.find(
+    (form) => form.formId.toString() === formId.toString()
+  );
+};
+
+// Instance method to get all active forms in the template
+TemplateSchema.methods.getActiveForms = function () {
+  return this.forms.filter(
+    (form) => form.status === "active" && form.isActive === true
+  );
+};
+
 // Instance method to get template statistics
 TemplateSchema.methods.getStats = async function () {
   const validation = await this.canBeActivated();
+  const activeForms = this.getActiveForms();
 
   return {
     formCount: this.forms ? this.forms.length : 0,
+    activeFormCount: activeForms.length,
     hasApprover: !!this.approverTemplate,
     canBeActivated: validation.isValid,
     validationErrors: validation.errors,
@@ -182,6 +298,20 @@ TemplateSchema.pre("save", async function (next) {
   try {
     // Check if template has no forms
     const hasNoForms = !this.forms || this.forms.length === 0;
+
+    // If no forms are provided, automatically set status to inactive
+    if (hasNoForms) {
+      console.log("Template has no forms, setting status to inactive");
+      this.status = "inactive";
+    }
+
+    // If forms were removed and template becomes empty, set to inactive
+    if (this.isModified("forms") && (!this.forms || this.forms.length === 0)) {
+      console.log(
+        "All forms removed from template, setting status to inactive"
+      );
+      this.status = "inactive";
+    }
 
     // If trying to set status to active, run full validation
     if (this.status === "active") {
@@ -199,12 +329,6 @@ TemplateSchema.pre("save", async function (next) {
       }
     }
 
-    // If no forms are provided, automatically set status to inactive
-    if (hasNoForms) {
-      console.log("Template has no forms, setting status to inactive");
-      this.status = "inactive";
-    }
-
     // Validate that approverTemplate exists if provided
     if (this.approverTemplate && this.isModified("approverTemplate")) {
       const User = this.constructor.model("User");
@@ -219,8 +343,9 @@ TemplateSchema.pre("save", async function (next) {
     // Validate that all referenced forms exist if forms are provided
     if (this.forms && this.forms.length > 0 && this.isModified("forms")) {
       const Form = this.constructor.model("Form");
+      const formIds = this.forms.map((form) => form.formId);
       const formCount = await Form.countDocuments({
-        _id: { $in: this.forms },
+        _id: { $in: formIds },
         isActive: true,
       });
 

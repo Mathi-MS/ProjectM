@@ -87,28 +87,47 @@ FormSchema.pre("save", function (next) {
   next();
 });
 
-// Post-save middleware to update template status when form status changes
+// Post-save middleware to update template status and embedded form data when form changes
 FormSchema.post("save", async function (doc) {
   try {
-    // Only check if the form status was modified
-    if (this._statusWasModified) {
-      console.log(
-        `Form ${doc.formName} (${doc._id}) status changed to: ${doc.status}`
-      );
+    const Template = this.constructor.model("Template");
 
-      const Template = this.constructor.model("Template");
+    // Find all templates that contain this form
+    const templates = await Template.find({
+      "forms.formId": doc._id,
+      isActive: true,
+    });
 
-      // Find all templates that contain this form
-      const templates = await Template.find({
-        forms: doc._id,
-        isActive: true,
+    console.log(`Found ${templates.length} templates containing this form`);
+
+    // Update embedded form data in all templates
+    for (const template of templates) {
+      let templateUpdated = false;
+
+      // Update the embedded form data
+      template.forms = template.forms.map((form) => {
+        if (form.formId.toString() === doc._id.toString()) {
+          templateUpdated = true;
+          return {
+            ...form.toObject(),
+            formName: doc.formName,
+            publicId: doc.publicId,
+            fields: doc.fields,
+            metadata: doc.metadata,
+            createdBy: doc.createdBy,
+            initiator: doc.initiator,
+            reviewer: doc.reviewer,
+            approver: doc.approver,
+            status: doc.status,
+            isActive: doc.isActive,
+          };
+        }
+        return form;
       });
 
-      console.log(`Found ${templates.length} templates containing this form`);
-
-      // Check each template to see if it should be deactivated
-      for (const template of templates) {
-        if (template.status === "active") {
+      if (templateUpdated) {
+        // Check if the form status was modified and handle template deactivation
+        if (this._statusWasModified && template.status === "active") {
           const validation = await template.canBeActivated();
 
           // If template can no longer be activated, set it to inactive
@@ -117,16 +136,22 @@ FormSchema.post("save", async function (doc) {
               `Template ${template.templateName} (${template._id}) is being set to inactive because it has no active forms`
             );
             template.status = "inactive";
-            await template.save();
           }
         }
-      }
 
-      // Clean up the tracking flag
+        await template.save();
+        console.log(
+          `Updated embedded form data in template: ${template.templateName}`
+        );
+      }
+    }
+
+    // Clean up the tracking flag
+    if (this._statusWasModified) {
       delete this._statusWasModified;
     }
   } catch (error) {
-    console.error("Error updating template status after form change:", error);
+    console.error("Error updating templates after form change:", error);
   }
 });
 
