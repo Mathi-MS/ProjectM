@@ -69,12 +69,65 @@ const FormSchema = new mongoose.Schema(
   }
 );
 
-// Update lastModified on save
+// Pre-save middleware to track status changes and update lastModified
 FormSchema.pre("save", function (next) {
   if (this.isModified() && !this.isNew) {
     this.metadata.lastModified = new Date();
   }
+
+  // Track if status is being modified
+  if (this.isModified("status")) {
+    this._statusWasModified = true;
+    this._oldStatus = this.constructor
+      .findOne({ _id: this._id })
+      .select("status")
+      .then((doc) => (doc ? doc.status : null));
+  }
+
   next();
+});
+
+// Post-save middleware to update template status when form status changes
+FormSchema.post("save", async function (doc) {
+  try {
+    // Only check if the form status was modified
+    if (this._statusWasModified) {
+      console.log(
+        `Form ${doc.formName} (${doc._id}) status changed to: ${doc.status}`
+      );
+
+      const Template = this.constructor.model("Template");
+
+      // Find all templates that contain this form
+      const templates = await Template.find({
+        forms: doc._id,
+        isActive: true,
+      });
+
+      console.log(`Found ${templates.length} templates containing this form`);
+
+      // Check each template to see if it should be deactivated
+      for (const template of templates) {
+        if (template.status === "active") {
+          const validation = await template.canBeActivated();
+
+          // If template can no longer be activated, set it to inactive
+          if (!validation.isValid) {
+            console.log(
+              `Template ${template.templateName} (${template._id}) is being set to inactive because it has no active forms`
+            );
+            template.status = "inactive";
+            await template.save();
+          }
+        }
+      }
+
+      // Clean up the tracking flag
+      delete this._statusWasModified;
+    }
+  } catch (error) {
+    console.error("Error updating template status after form change:", error);
+  }
 });
 
 // Static method to find forms by user

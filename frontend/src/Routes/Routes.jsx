@@ -4,6 +4,7 @@ import Dashboard from "../pages/Dashboard";
 import Profile from "../pages/Profile";
 import Users from "../pages/Users";
 import CreateForm from "../pages/CreateForm";
+import Templates from "../pages/Templates";
 import FormBuilder from "../pages/FormBuilder";
 import FormBuilderDemo from "../pages/FormBuilderDemo";
 import Forms from "../pages/Forms";
@@ -56,6 +57,10 @@ const routes = createHashRouter([
       {
         path: "create-form",
         element: <CreateForm />,
+      },
+      {
+        path: "templates",
+        element: <Templates />,
       },
       {
         path: "forms",

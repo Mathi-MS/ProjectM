@@ -73,6 +73,7 @@ async function testStatusValidation() {
         fields: [
           {
             id: "field1",
+            name: "fullName",
             type: "text",
             label: "Full Name",
             required: true,
@@ -80,6 +81,7 @@ async function testStatusValidation() {
           },
           {
             id: "field2",
+            name: "emailAddress",
             type: "email",
             label: "Email Address",
             required: true,
@@ -169,12 +171,14 @@ async function testStatusValidation() {
         fields: [
           {
             id: "field1",
+            name: "invalidField1",
             type: "text",
             label: "", // Empty label - should be invalid
             required: true,
           },
           {
             id: "field2",
+            name: "invalidField2",
             type: "", // Empty type - should be invalid
             label: "Some Label",
             required: false,

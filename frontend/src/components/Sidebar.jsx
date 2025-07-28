@@ -17,6 +17,7 @@ import {
   Assignment,
   People,
   Description as DescriptionIcon,
+  ViewList as ViewListIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import Cookies from "js-cookie";
@@ -35,6 +36,7 @@ const Sidebar = ({ open = false, onClose, collapsed = false }) => {
   const menuItems = [
     { text: "Dashboard", icon: <Dashboard />, path: "/app/dashboard" },
     { text: "Create Form", icon: <Assignment />, path: "/app/create-form" },
+    { text: "Templates", icon: <ViewListIcon />, path: "/app/templates" },
     ...(role === "Admin"
       ? [{ text: "User Management", icon: <People />, path: "/app/users" }]
       : []),

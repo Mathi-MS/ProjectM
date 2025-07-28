@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/database");
 const User = require("./models/User");
 const Form = require("./models/Form");
+const Template = require("./models/Template");
 const {
   validateFormFields,
   validateFields,
@@ -2165,6 +2166,688 @@ app.delete("/api/forms/:id", authenticateToken, async (req, res) => {
 
     res.status(500).json({
       message: "Internal server error while deleting form",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// ==================== TEMPLATE ROUTES ====================
+
+// Get all templates endpoint
+app.get("/api/templates", authenticateToken, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Build search query
+    const searchQuery = search
+      ? {
+          templateName: { $regex: search, $options: "i" },
+          isActive: true,
+        }
+      : { isActive: true };
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortDirection = sortOrder === "desc" ? -1 : 1;
+
+    // Get templates with pagination and sorting
+    const templates = await Template.find(searchQuery)
+      .populate([
+        { path: "createdBy", select: "firstName lastName email" },
+        { path: "approverTemplate", select: "firstName lastName email" },
+        {
+          path: "forms",
+          select: "formName status",
+          match: { isActive: true, status: "active" },
+        },
+      ])
+      .sort({ [sortBy]: sortDirection })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const total = await Template.countDocuments(searchQuery);
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / parseInt(limit));
+    const hasNextPage = parseInt(page) < totalPages;
+    const hasPrevPage = parseInt(page) > 1;
+
+    console.log("Templates API - Query params:", {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      search,
+      sortBy,
+      sortOrder,
+    });
+    console.log("Templates API - Search query:", searchQuery);
+    console.log("Templates API - Found templates:", templates.length);
+    console.log("Templates API - Total count:", total);
+
+    res.json({
+      templates: templates.map((template) => ({
+        id: template._id,
+        templateName: template.templateName,
+        approverTemplate: template.approverTemplate,
+        status: template.status,
+        createdDate: template.createdAt,
+        formNames: template.forms.map((form) => form.formName).join(", "),
+        forms: template.forms,
+        createdBy: template.createdBy,
+        isActive: template.isActive,
+      })),
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems: total,
+        itemsPerPage: parseInt(limit),
+        hasNextPage,
+        hasPrevPage,
+      },
+    });
+  } catch (error) {
+    console.error("Templates fetch error:", error);
+    res.status(500).json({
+      message: "Internal server error while fetching templates",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Get template by ID endpoint
+app.get("/api/templates/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid template ID format",
+      });
+    }
+
+    const template = await Template.findById(id).populate([
+      { path: "createdBy", select: "firstName lastName email" },
+      { path: "approverTemplate", select: "firstName lastName email" },
+      {
+        path: "forms",
+        select: "formName status",
+        match: { isActive: true },
+      },
+    ]);
+
+    if (!template || !template.isActive) {
+      return res.status(404).json({
+        message: "Template not found",
+      });
+    }
+
+    res.json({
+      id: template._id,
+      templateName: template.templateName,
+      approverTemplate: template.approverTemplate,
+      status: template.status,
+      createdDate: template.createdAt,
+      forms: template.forms,
+      createdBy: template.createdBy,
+      isActive: template.isActive,
+    });
+  } catch (error) {
+    console.error("Template fetch error:", error);
+    res.status(500).json({
+      message: "Internal server error while fetching template",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Create template endpoint
+app.post(
+  "/api/templates",
+  authenticateToken,
+  [
+    body("templateName")
+      .trim()
+      .isLength({ min: 3, max: 100 })
+      .withMessage("Template name must be between 3 and 100 characters"),
+    body("forms").isArray().withMessage("Forms must be an array"),
+    body("approverTemplate")
+      .notEmpty()
+      .withMessage("Approver template is required"),
+    body("status")
+      .optional()
+      .isIn(["active", "inactive"])
+      .withMessage("Status must be either 'active' or 'inactive'"),
+  ],
+  async (req, res) => {
+    try {
+      // Check validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const {
+        templateName,
+        forms,
+        approverTemplate,
+        status = "active",
+      } = req.body;
+
+      // Check if template name already exists (case-insensitive)
+      console.log("Checking for existing template with name:", templateName);
+
+      // Escape special regex characters in template name
+      const escapedTemplateName = templateName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+      console.log("Escaped template name:", escapedTemplateName);
+
+      const existingTemplate = await Template.findOne({
+        templateName: { $regex: new RegExp(`^${escapedTemplateName}$`, "i") },
+        isActive: true,
+      });
+      console.log("Existing template found:", existingTemplate);
+
+      if (existingTemplate) {
+        console.log("Template name conflict detected:", {
+          requestedName: templateName,
+          existingName: existingTemplate.templateName,
+          existingId: existingTemplate._id,
+          existingIsActive: existingTemplate.isActive,
+        });
+        return res.status(400).json({
+          message: "Template with this name already exists",
+        });
+      }
+
+      // Also check for any templates with this name (including inactive ones) for debugging
+      const allTemplatesWithName = await Template.find({
+        templateName: { $regex: new RegExp(`^${templateName}$`, "i") },
+      });
+      console.log(
+        "All templates with this name (including inactive):",
+        allTemplatesWithName.map((t) => ({
+          name: t.templateName,
+          id: t._id,
+          isActive: t.isActive,
+          status: t.status,
+        }))
+      );
+
+      // Validate that all forms exist (they can be inactive during template creation)
+      const existingForms = await Form.find({
+        _id: { $in: forms },
+        isActive: true,
+      });
+
+      if (existingForms.length !== forms.length) {
+        return res.status(400).json({
+          message: "One or more selected forms do not exist",
+        });
+      }
+
+      // Validate that approver exists
+      const approver = await User.findById(approverTemplate);
+      if (!approver || !approver.isActive) {
+        return res.status(400).json({
+          message: "Selected approver does not exist or is not active",
+        });
+      }
+
+      // Business logic: Handle status based on forms
+      let finalStatus = status || "inactive"; // Default to inactive if no status provided
+
+      // If no forms provided, force status to inactive
+      if (!forms || forms.length === 0) {
+        finalStatus = "inactive";
+        console.log("No forms provided, forcing status to inactive");
+      }
+
+      // If trying to set active status, validate at least one form exists
+      if (status === "active" && (!forms || forms.length === 0)) {
+        return res.status(400).json({
+          message: "Cannot create active template without at least one form",
+        });
+      }
+
+      // Create template
+      const template = new Template({
+        templateName,
+        forms,
+        approverTemplate,
+        createdBy: req.user.id,
+        status: finalStatus,
+      });
+
+      await template.save();
+
+      // Populate the created template for response
+      await template.populate([
+        { path: "createdBy", select: "firstName lastName email" },
+        { path: "approverTemplate", select: "firstName lastName email" },
+        {
+          path: "forms",
+          select: "formName status",
+          match: { isActive: true },
+        },
+      ]);
+
+      res.status(201).json({
+        message: "Template created successfully",
+        template: {
+          id: template._id,
+          templateName: template.templateName,
+          approverTemplate: template.approverTemplate,
+          status: template.status,
+          createdDate: template.createdAt,
+          forms: template.forms,
+          createdBy: template.createdBy,
+          isActive: template.isActive,
+        },
+      });
+    } catch (error) {
+      console.error("Template creation error:", error);
+
+      if (error.code === 11000) {
+        // Check which field caused the duplicate key error
+        if (error.keyPattern && error.keyPattern.templateName) {
+          return res.status(400).json({
+            message: "Template with this name already exists",
+          });
+        } else if (error.keyPattern && error.keyPattern.publicId) {
+          return res.status(400).json({
+            message: "Duplicate public ID error. Please contact support.",
+          });
+        } else {
+          return res.status(400).json({
+            message: "Duplicate entry detected",
+            error:
+              process.env.NODE_ENV === "development"
+                ? error.message
+                : undefined,
+          });
+        }
+      }
+
+      res.status(500).json({
+        message: "Internal server error while creating template",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// Update template endpoint
+app.put(
+  "/api/templates/:id",
+  authenticateToken,
+  [
+    body("templateName")
+      .trim()
+      .isLength({ min: 3, max: 100 })
+      .withMessage("Template name must be between 3 and 100 characters"),
+    body("forms").isArray().withMessage("Forms must be an array"),
+    body("approverTemplate")
+      .notEmpty()
+      .withMessage("Approver template is required"),
+    body("status")
+      .optional()
+      .isIn(["active", "inactive"])
+      .withMessage("Status must be either 'active' or 'inactive'"),
+  ],
+  async (req, res) => {
+    try {
+      // Check validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { id } = req.params;
+      const { templateName, forms, approverTemplate, status } = req.body;
+
+      // Validate ObjectId
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({
+          message: "Invalid template ID format",
+        });
+      }
+
+      const template = await Template.findById(id);
+      if (!template || !template.isActive) {
+        return res.status(404).json({
+          message: "Template not found",
+        });
+      }
+
+      // Check if template name already exists (case-insensitive) - exclude current template
+      console.log(
+        "Checking for existing template with name (update):",
+        templateName,
+        "excluding ID:",
+        id
+      );
+
+      // Escape special regex characters in template name
+      const escapedTemplateName = templateName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+      console.log("Escaped template name (update):", escapedTemplateName);
+
+      const existingTemplate = await Template.findOne({
+        _id: { $ne: id },
+        templateName: { $regex: new RegExp(`^${escapedTemplateName}$`, "i") },
+        isActive: true,
+      });
+      console.log("Existing template found (update):", existingTemplate);
+
+      if (existingTemplate) {
+        console.log("Template name conflict detected (update):", {
+          requestedName: templateName,
+          existingName: existingTemplate.templateName,
+          existingId: existingTemplate._id,
+          currentId: id,
+        });
+        return res.status(400).json({
+          message: "Template with this name already exists",
+        });
+      }
+
+      // Check if user owns this template or is admin
+      if (
+        template.createdBy &&
+        template.createdBy.toString() !== req.user.id &&
+        req.user.role !== "Admin"
+      ) {
+        return res.status(403).json({
+          message: "Access denied. You can only edit your own templates.",
+        });
+      }
+
+      // Validate that all forms exist (they can be inactive during template update)
+      const existingForms = await Form.find({
+        _id: { $in: forms },
+        isActive: true,
+      });
+
+      if (existingForms.length !== forms.length) {
+        return res.status(400).json({
+          message: "One or more selected forms do not exist",
+        });
+      }
+
+      // Validate that approver exists
+      const approver = await User.findById(approverTemplate);
+      if (!approver || !approver.isActive) {
+        return res.status(400).json({
+          message: "Selected approver does not exist or is not active",
+        });
+      }
+
+      // Business logic: Handle status based on forms
+      let finalStatus = status !== undefined ? status : template.status;
+
+      // If no forms provided, force status to inactive
+      if (!forms || forms.length === 0) {
+        finalStatus = "inactive";
+        console.log("No forms provided in update, forcing status to inactive");
+      }
+
+      // If trying to set active status, validate at least one form exists
+      if (status === "active" && (!forms || forms.length === 0)) {
+        return res.status(400).json({
+          message: "Cannot set template to active without at least one form",
+        });
+      }
+
+      // Update template
+      template.templateName = templateName;
+      template.forms = forms;
+      template.approverTemplate = approverTemplate;
+      template.status = finalStatus;
+
+      await template.save();
+
+      // Populate the updated template for response
+      await template.populate([
+        { path: "createdBy", select: "firstName lastName email" },
+        { path: "approverTemplate", select: "firstName lastName email" },
+        {
+          path: "forms",
+          select: "formName status",
+          match: { isActive: true },
+        },
+      ]);
+
+      res.json({
+        message: "Template updated successfully",
+        template: {
+          id: template._id,
+          templateName: template.templateName,
+          approverTemplate: template.approverTemplate,
+          status: template.status,
+          createdDate: template.createdAt,
+          forms: template.forms,
+          createdBy: template.createdBy,
+          isActive: template.isActive,
+        },
+      });
+    } catch (error) {
+      console.error("Template update error:", error);
+
+      if (error.code === 11000) {
+        return res.status(400).json({
+          message: "Template with this name already exists",
+        });
+      }
+
+      res.status(500).json({
+        message: "Internal server error while updating template",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+// Update template status endpoint
+app.patch("/api/templates/:id/status", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid template ID format",
+      });
+    }
+
+    // Validate status
+    if (!["active", "inactive"].includes(status)) {
+      return res.status(400).json({
+        message: "Status must be either 'active' or 'inactive'",
+      });
+    }
+
+    const template = await Template.findById(id);
+    if (!template || !template.isActive) {
+      return res.status(404).json({
+        message: "Template not found",
+      });
+    }
+
+    // Check if user owns this template or is admin
+    if (
+      template.createdBy &&
+      template.createdBy.toString() !== req.user.id &&
+      req.user.role !== "Admin"
+    ) {
+      return res.status(403).json({
+        message: "Access denied. You can only modify your own templates.",
+      });
+    }
+
+    // If trying to activate, validate using the template's validation method
+    if (status === "active") {
+      const validation = await template.canBeActivated();
+
+      if (!validation.isValid) {
+        return res.status(400).json({
+          message: "Atleast One form must be active to activate the template",
+          errors: validation.errors,
+          details: validation.errors.map((error) => error.message).join(", "),
+        });
+      }
+    }
+
+    template.status = status;
+    await template.save();
+
+    res.json({
+      message: `Template ${
+        status === "active" ? "activated" : "deactivated"
+      } successfully`,
+      template: {
+        id: template._id,
+        status: template.status,
+      },
+    });
+  } catch (error) {
+    console.error("Template status update error:", error);
+    res.status(500).json({
+      message: "Internal server error while updating template status",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Validate template activation endpoint
+app.get("/api/templates/:id/validate", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid template ID format",
+      });
+    }
+
+    const template = await Template.findById(id).populate([
+      { path: "createdBy", select: "firstName lastName email" },
+      { path: "approverTemplate", select: "firstName lastName email" },
+      {
+        path: "forms",
+        select: "formName status isActive",
+        match: { isActive: true },
+      },
+    ]);
+
+    if (!template || !template.isActive) {
+      return res.status(404).json({
+        message: "Template not found",
+      });
+    }
+
+    // Check if user has permission to view this template
+    if (
+      template.createdBy &&
+      template.createdBy._id.toString() !== req.user.id &&
+      req.user.role !== "Admin"
+    ) {
+      return res.status(403).json({
+        message: "Access denied. You can only validate your own templates.",
+      });
+    }
+
+    const validation = await template.canBeActivated();
+    const stats = await template.getStats();
+
+    res.json({
+      templateId: template._id,
+      templateName: template.templateName,
+      currentStatus: template.status,
+      validation: {
+        canBeActivated: validation.isValid,
+        errors: validation.errors,
+      },
+      statistics: stats,
+      formsDetails: template.forms.map((form) => ({
+        id: form._id,
+        name: form.formName,
+        status: form.status,
+        isActive: form.isActive,
+      })),
+    });
+  } catch (error) {
+    console.error("Template validation error:", error);
+    res.status(500).json({
+      message: "Internal server error while validating template",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Delete template endpoint (soft delete)
+app.delete("/api/templates/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        message: "Invalid template ID format",
+      });
+    }
+
+    const template = await Template.findById(id);
+    if (!template || !template.isActive) {
+      return res.status(404).json({
+        message: "Template not found",
+      });
+    }
+
+    // Check if user owns this template or is admin
+    if (
+      template.createdBy &&
+      template.createdBy.toString() !== req.user.id &&
+      req.user.role !== "Admin"
+    ) {
+      return res.status(403).json({
+        message: "Access denied. You can only delete your own templates.",
+      });
+    }
+
+    await template.softDelete();
+
+    res.json({
+      message: "Template deleted successfully",
+    });
+  } catch (error) {
+    console.error("Template delete error:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Template ID:", req.params.id);
+    console.error("User ID:", req.user?.id);
+
+    res.status(500).json({
+      message: "Internal server error while deleting template",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
