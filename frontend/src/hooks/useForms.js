@@ -129,6 +129,7 @@ export const useUpdateFormStatus = () => {
     onSuccess: (data, variables) => {
       // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
       // Invalidate and refetch specific form
       queryClient.invalidateQueries({ queryKey: ["form", variables.id] });
       toast.success(data.message || "Form status updated successfully!");

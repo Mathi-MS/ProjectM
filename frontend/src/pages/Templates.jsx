@@ -713,9 +713,7 @@ const Templates = () => {
                 fullWidth
                 size="small"
                 error={!!errors.templateName}
-                helperText={
-                  errors.templateName?.message
-                }
+                helperText={errors.templateName?.message}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -744,65 +742,84 @@ const Templates = () => {
                 name="forms"
                 control={control}
                 render={({ field }) => (
-                  <Autocomplete
-                    multiple
-                    size="small"
-                    options={forms}
-                    getOptionLabel={(option) => option.formName}
-                    value={forms.filter((form) =>
-                      field.value.includes(form.id)
-                    )}
-                    onChange={(event, newValue) => {
-                      field.onChange(newValue.map((form) => form.id));
-                    }}
-                    loading={formsLoading}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Forms"
-                        error={!!errors.forms}
-                        helperText={errors.forms?.message}
-                        InputProps={{
-                          ...params.InputProps,
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <AssignmentIcon
-                                sx={{ color: "#457860", fontSize: 20 }}
+                  <FormControl size="small" fullWidth error={!!errors.forms}>
+                    <InputLabel>Forms</InputLabel>
+                    <Select
+                      {...field}
+                      multiple
+                      label="Forms"
+                      value={field.value || []}
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.map((value) => {
+                            const form = forms.find(
+                              (f) => (f.id || f._id) === value
+                            );
+                            return (
+                              <Chip
+                                key={value}
+                                label={form?.formName || value}
+                                size="small"
+                                variant="outlined"
+                                sx={{
+                                  borderColor: "#457860",
+                                  color: "#457860",
+                                }}
                               />
-                            </InputAdornment>
-                          ),
-                        }}
-                        sx={{
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: 2,
-                            "&:hover fieldset": {
-                              borderColor: "#457860",
-                            },
-                            "&.Mui-focused fieldset": {
-                              borderColor: "#457860",
-                            },
-                          },
-                          "& .MuiInputLabel-root.Mui-focused": {
-                            color: "#457860",
-                          },
-                        }}
-                      />
+                            );
+                          })}
+                        </Box>
+                      )}
+                      sx={{
+                        borderRadius: 2,
+                        "&:hover .MuiOutlinedInput-notchedOutline": {
+                          borderColor: "#457860",
+                        },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                          borderColor: "#457860",
+                        },
+                      }}
+                    >
+                      {formsLoading ? (
+                        <MenuItem disabled>Loading forms...</MenuItem>
+                      ) : formsError ? (
+                        <MenuItem disabled>Error loading forms</MenuItem>
+                      ) : forms.length === 0 ? (
+                        <MenuItem disabled>No forms available</MenuItem>
+                      ) : (
+                        forms.map((form) => (
+                          <MenuItem
+                            key={form.id || form._id}
+                            value={form.id || form._id}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                              }}
+                            >
+                              <AssignmentIcon
+                                sx={{ color: "#457860", fontSize: 16 }}
+                              />
+                              {form.formName}
+                            </Box>
+                          </MenuItem>
+                        ))
+                      )}
+                    </Select>
+                    {errors.forms && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ mt: 0.5, ml: 1.5 }}
+                      >
+                        {errors.forms.message}
+                      </Typography>
                     )}
-                    renderTags={(value, getTagProps) =>
-                      value.map((option, index) => (
-                        <Chip
-                          variant="outlined"
-                          label={option.formName}
-                          {...getTagProps({ index })}
-                          key={option.id}
-                          sx={{
-                            borderColor: "#457860",
-                            color: "#457860",
-                          }}
-                        />
-                      ))
-                    }
-                  />
+                  </FormControl>
                 )}
               />
 
@@ -942,7 +959,9 @@ const Templates = () => {
         </DialogTitle>
 
         <DialogContent sx={{ pt: 2 }}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5,mt:1 }}>
+          <Box
+            sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}
+          >
             {/* Template Name */}
             <TextField
               label="Template Name"

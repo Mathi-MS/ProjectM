@@ -8,7 +8,6 @@ export const useTemplates = (options = {}) => {
     queryKey: ["templates", options],
     queryFn: async () => {
       const params = new URLSearchParams();
-
       if (options.page) params.append("page", options.page);
       if (options.limit) params.append("limit", options.limit);
       if (options.search) params.append("search", options.search);
