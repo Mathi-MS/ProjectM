@@ -10,7 +10,6 @@ export const useLogin = () => {
       return response;
     },
     onSuccess: () => {
-      // queryClient.invalidateQueries({queryKey: ["approveFlow"]});
     },
     onError: (error) => {
       console.error(error);
@@ -26,7 +25,6 @@ export const useRegister = () => {
       return response;
     },
     onSuccess: () => {
-      // queryClient.invalidateQueries({queryKey: ["approveFlow"]});
     },
     onError: (error) => {
       console.error(error);
@@ -59,7 +57,7 @@ export const useUsers = (params = {}) => {
       return response;
     },
     keepPreviousData: true,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 };
 

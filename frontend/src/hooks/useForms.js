@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import api from "../Interceptors/Interceptor";
 
-// Get all forms
 export const useForms = (options = {}) => {
   return useQuery({
     queryKey: ["forms", options],
@@ -16,20 +15,13 @@ export const useForms = (options = {}) => {
       if (options.sortOrder) params.append("sortOrder", options.sortOrder);
 
       const response = await api.get(`/forms?${params.toString()}`);
-      console.log("useForms API URL:", `/forms?${params.toString()}`);
-      console.log("useForms API response:", response.data);
-      console.log(
-        "Forms returned from API:",
-        response.data?.forms?.length || 0
-      );
       return response.data;
     },
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000, 
   });
 };
 
-// Get form by ID
 export const useForm = (id) => {
   return useQuery({
     queryKey: ["form", id],
@@ -44,7 +36,6 @@ export const useForm = (id) => {
   });
 };
 
-// Create new form (just name)
 export const useCreateForm = () => {
   const queryClient = useQueryClient();
 
@@ -54,7 +45,6 @@ export const useCreateForm = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
       toast.success(data.message || "Form created successfully!");
     },
@@ -67,7 +57,6 @@ export const useCreateForm = () => {
   });
 };
 
-// Update form (full form with fields)
 export const useUpdateForm = () => {
   const queryClient = useQueryClient();
 
@@ -77,9 +66,7 @@ export const useUpdateForm = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
-      // Invalidate and refetch specific form
       queryClient.invalidateQueries({ queryKey: ["form", variables.id] });
       toast.success(data.message || "Form updated successfully!");
     },
@@ -91,8 +78,6 @@ export const useUpdateForm = () => {
     },
   });
 };
-
-// Update form name
 export const useUpdateFormName = () => {
   const queryClient = useQueryClient();
 
@@ -102,9 +87,7 @@ export const useUpdateFormName = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
-      // Invalidate and refetch specific form
       queryClient.invalidateQueries({ queryKey: ["form", variables.id] });
       toast.success(data.message || "Form name updated successfully!");
     },
@@ -117,7 +100,6 @@ export const useUpdateFormName = () => {
   });
 };
 
-// Update form status
 export const useUpdateFormStatus = () => {
   const queryClient = useQueryClient();
 
@@ -127,10 +109,8 @@ export const useUpdateFormStatus = () => {
       return response.data;
     },
     onSuccess: (data, variables) => {
-      // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
       queryClient.invalidateQueries({ queryKey: ["templates"] });
-      // Invalidate and refetch specific form
       queryClient.invalidateQueries({ queryKey: ["form", variables.id] });
       toast.success(data.message || "Form status updated successfully!");
     },
@@ -143,7 +123,6 @@ export const useUpdateFormStatus = () => {
   });
 };
 
-// Delete form
 export const useDeleteForm = () => {
   const queryClient = useQueryClient();
 
@@ -153,7 +132,6 @@ export const useDeleteForm = () => {
       return response.data;
     },
     onSuccess: (data) => {
-      // Invalidate and refetch forms list
       queryClient.invalidateQueries({ queryKey: ["forms"] });
       toast.success(data.message || "Form deleted successfully!");
     },

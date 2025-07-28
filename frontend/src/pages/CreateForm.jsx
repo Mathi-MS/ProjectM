@@ -193,7 +193,6 @@ const CreateForm = () => {
     sortOrder: sortDirection,
   };
 
-  console.log("API Parameters:", apiParams); // Debug API params
 
   const { data: formsData, isLoading, error, refetch } = useForms(apiParams);
 
@@ -269,11 +268,6 @@ const CreateForm = () => {
   };
 
   const handleEditForm = (form) => {
-    console.log("Edit form data:", form); // Debug log
-    console.log("Form initiator:", form.initiator); // Debug log
-    console.log("Form reviewer:", form.reviewer); // Debug log
-    console.log("Form approver:", form.approver); // Debug log
-
     setModalMode("edit");
     setSelectedForm(form);
 
@@ -346,10 +340,7 @@ const CreateForm = () => {
       setOpenModal(false);
       reset();
     } catch (error) {
-      toast.error(
-        error.message ||
-          `Failed to ${modalMode === "add" ? "create" : "update"} form`
-      );
+
     }
   };
 
